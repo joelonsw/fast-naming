@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Naming - 공모전 작명 결과</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏆 Fast Naming - 공모전 작명 결과</h1>
+            <p class="subtitle">AI가 생성한 최적의 작명 후보들을 확인하세요</p>
+        </header>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>결과를 불러오는 중...</p>
+        </div>
+
+        <div class="error" id="error" style="display: none;">
+            <h2>❌ 오류가 발생했습니다</h2>
+            <p id="errorMessage"></p>
+            <button onclick="location.reload()">다시 시도</button>
+        </div>
+
+        <div class="content" id="content" style="display: none;">
+            <!-- 공모전 정보 -->
+            <section class="contest-info">
+                <h2>📋 공모전 정보</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>공모전명:</label>
+                        <span id="contestTitle"></span>
+                    </div>
+                    <div class="info-item">
+                        <label>주최기관:</label>
+                        <span id="contestHeldBy"></span>
+                    </div>
+                    <div class="info-item">
+                        <label>공모전 유형:</label>
+                        <span id="contestType"></span>
+                    </div>
+                    <div class="info-item">
+                        <label>기관 유형:</label>
+                        <span id="contestHeldByType"></span>
+                    </div>
+                    <div class="info-item full-width">
+                        <label>공모전 내용:</label>
+                        <p id="contestContent"></p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 통계 정보 -->
+            <section class="statistics">
+                <h2>📊 생성 통계</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>총 작명 수</h3>
+                        <div class="stat-number" id="totalSubmissions">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>사용된 모델</h3>
+                        <div class="stat-number" id="totalModels">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>제공자 수</h3>
+                        <div class="stat-number" id="totalProviders">0</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 작명 목록 -->
+            <section class="submissions">
+                <h2>🎯 생성된 작명 목록</h2>
+                <div class="filters">
+                    <select id="providerFilter" onchange="filterSubmissions()">
+                        <option value="">모든 제공자</option>
+                    </select>
+                    <select id="modelFilter" onchange="filterSubmissions()">
+                        <option value="">모든 모델</option>
+                    </select>
+                    <input type="text" id="searchInput" placeholder="작명 검색..." onkeyup="filterSubmissions()">
+                </div>
+                <div class="submissions-grid" id="submissionsGrid"></div>
+            </section>
+
+            <!-- 예시 데이터 -->
+            <section class="examples">
+                <h2>📚 참고된 예시</h2>
+                <div class="examples-grid" id="examplesGrid"></div>
+            </section>
+
+            <!-- 제공자별 분포 -->
+            <section class="provider-distribution">
+                <h2>🤖 제공자별 분포</h2>
+                <div class="provider-chart" id="providerChart"></div>
+            </section>
+
+            <!-- 모델별 분포 -->
+            <section class="model-distribution">
+                <h2>🧠 모델별 분포</h2>
+                <div class="model-chart" id="modelChart"></div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

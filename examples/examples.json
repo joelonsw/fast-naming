@@ -1,0 +1,324 @@
+[
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"사기업",
+       "contestTitle":"여기어때 전용서체 네이밍 공모전",
+       "contestWinner":"잘난체",
+       "strength":"창의성, 위트"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"사기업",
+       "contestTitle":"GS칼텍스 미래형 주유소 명칭 공모전",
+       "contestWinner":"에너지플러스 허브 (energy plus hub)",
+       "strength":"미래지향성, 확장성"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"사기업",
+       "contestTitle":"한화생명 보험 아이디어 공모전",
+       "contestWinner":"ON-SURE (온슈어)",
+       "strength":"직관성, 신뢰감"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"사기업",
+       "contestTitle":"야놀자 공유숙박 브랜드 네이밍 공모전",
+       "contestWinner":"Y-house (와이-하우스)",
+       "strength":"브랜드 연상, 간결성"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"2025년 장애인편의점 네이밍 공모전",
+       "contestWinner":"함께가게",
+       "strength":"포용성과 친근함 강조 (‘함께’라는 단어로 연대와 접근성을 표현)"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"사기업",
+       "contestTitle":"K-AI 파일럿 전 국민 네이밍 공모전 (한국항공우주산업)",
+       "contestWinner":"KAILOT (카일럿)",
+       "strength":"명확한 합성어 구성 (‘KAI’ + ‘Pilot’)과 그리스어 Kairos의 의미 내포, 직관성과 독창성"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"2024 세계신안보포럼 (WESF) 슬로건 공모전",
+       "contestWinner":"경계 없는 위협, 경계 없는 협력으로 답하다",
+       "strength":"균형감 있는 리듬과 메시지의 통일성, 긴 문장 속에서도 강한 기억력, 안보 협력 강조"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"사기업",
+       "contestTitle":"iH공사 사회공헌 브랜드 네이밍 공모전",
+       "contestWinner":"iHUG(아이허그)",
+       "strength":"창의성, 상징성(iH공사의 무한한 포용과 나눔을 의미)"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"부산 남구 도시브랜드 네이밍 공모전",
+       "contestWinner":"YOU & NAMGU",
+       "strength":"지역성, 국제성"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"학교",
+       "contestTitle":"가톨릭대학교 개교 170주년 슬로건 공모전",
+       "contestWinner":"나아가라, 세상의 빛이 되기까지. 도전해라, 세계를 밝힐 때까지",
+       "strength":"비전 제시성, 도전 정신"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"학교",
+       "contestTitle":"가톨릭대학교 슬로건",
+       "contestWinner":"Three distinct campuses, One great University",
+       "strength":"통합성과 국제적 감각"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"학교",
+       "contestTitle":"건국대학교 슬로건",
+       "contestWinner":"시대를 앞선 지성",
+       "strength":"미래지향성과 학문적 가치"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"서울시 공공와이파이 브랜드 네이밍 공모",
+       "contestWinner":"까치온",
+       "strength":"지역 상징(까치)+접속 ‘온(ON)’의 언어유희, 기억 용이성"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"HUG 도시재생 금융상품 네이밍 공모",
+       "contestWinner":"마을되살림 융자",
+       "strength":"정책 목적 직관적 전달, 사회적 가치 강조"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"행정안전부 소통24 Reboot 일반고 특화 브랜드 네이밍 공모",
+       "contestWinner":"꿈잇고 (dream, it go)",
+       "strength":"중의적 의미(꿈을 잇다/나아가다), 청소년 타깃 친화성"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"iH공사 사회공헌 브랜드 네이밍 공모",
+       "contestWinner":"iHUG",
+       "strength":"기관 이니셜(iH)+따뜻한 의미(Hug) 결합, 발음 용이"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"여성기업 일자리허브 브랜드 네이밍 공모",
+       "contestWinner":"여딤돌",
+       "strength":"‘여성+디딤돌’의 결합으로 지원 플랫폼의 역할을 직관적으로 표현"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"해양경찰청 수사 슬로건 공모",
+       "contestWinner":"공정한 수사, 바로 서는 해양법질서",
+       "strength":"핵심가치(공정·법질서) 명확성, 권위감"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"코레일네트웍스 2025 대국민 안전 슬로건 공모",
+       "contestWinner":"1초의 멈춤, 10초의 살핌, 100% 안전",
+       "strength":"리듬·반복 구조로 기억성↑, 행동 유도성"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"한국산업인력공단 블라인드 채용 슬로건 공모",
+       "contestWinner":"Every Chance Job(잡) Go(고)!",
+       "strength":"언어유희·운율감, 참여 유도형 톤"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"사기업",
+       "contestTitle":"비디텍 제1회 사내 브랜드 네이밍 공모",
+       "contestWinner":"Aero(에어로)",
+       "strength":"기술/속도 이미지 함축, 범용 확장성"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"사기업",
+       "contestTitle":"KAI 사내 어벤저스 슬로건 공모",
+       "contestWinner":"혁신을 잇는 우리",
+       "strength":"내부 결속·혁신지향 메시지, 간결한 동사형"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"학교",
+       "contestTitle":"서원대학교 슬로건 공모",
+       "contestWinner":"THE ONE, SEOWON!",
+       "strength":"간결·선언형, 학교명과 운율 결합"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"학교",
+       "contestTitle":"동강대학교 새 슬로건 공모",
+       "contestWinner":"DO it Great, Eastern Hill",
+       "strength":"학교명 어원(Eastern Hill) 반영, 동기부여형 문장"
+    },
+    {
+       "contestType":"네이밍",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"성북구 마을공동체사업 브랜드 네이밍·슬로건 공모",
+       "contestWinner":"성북마실 / 성북아 놀자! (수상작 다수 중 예시)",
+       "strength":"지역명 결합으로 친근감, 생활밀착형 표현"
+    },
+    {
+       "contestType":"슬로건",
+       "contestHeldByType":"공공기관",
+       "contestTitle":"거제시 브랜드 슬로건 공모",
+       "contestWinner":"후보 수상작 다수(최종 브랜드 확정 전 단계의 수상작)",
+       "strength":"지역 정체성 반영 후보안을 통해 대중 선호 탐색"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "용산공원 네이밍 공모전",
+        "contestWinner": "용산공원",
+        "strength": "클래식함, 대중적 친숙함"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "4대강살리기 사업 애칭 공모전",
+        "contestWinner": "사강나래",
+        "strength": "상징성, 서사 부여"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "식품안전정보원 캐릭터 이름 공모전",
+        "contestWinner": "푸디나비",
+        "strength": "기능적 명료성, 창의적 조합"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "사기업",
+        "contestTitle": "IoT 게이트웨이",
+        "contestWinner": "Aero (에어로)",
+        "strength": "현대성, 글로벌 지향성, 간결함"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "사기업",
+        "contestTitle": "IoT 게이트웨이",
+        "contestWinner": "Green Control System",
+        "strength": "기능적 명확성, 친환경성"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "사기업",
+        "contestTitle": "아파트 브랜드",
+        "contestWinner": "Elladian (엘라디안)",
+        "strength": "고급스러운 이미지, 유럽풍의 우아함"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "사기업",
+        "contestTitle": "랜드마크 타워",
+        "contestWinner": "부산롯데타워",
+        "strength": "권위성, 브랜드 자산, 대중적 인지도"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "학교",
+        "contestTitle": "챗봇",
+        "contestWinner": "채티 (Chat-E)",
+        "strength": "친근함, 기억 용이성, 브랜드 연계성"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "사기업",
+        "contestTitle": "최고급 아파트",
+        "contestWinner": "래미안 원 펜타스",
+        "strength": "독보성, 프리미엄 스토리텔링, 브랜드 자산"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "사회공헌 활동",
+        "contestWinner": "iHUG (아이허그)",
+        "strength": "공동체 지향, 감성적 연결"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "금융 상품",
+        "contestWinner": "마을되살림 융자",
+        "strength": "사회적 목적성, 신뢰성, 명료함"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "학교",
+        "contestTitle": "일반 슬로건 공모전",
+        "contestWinner": "그대는 선구자가 되어 나아가라, 그 길은 푸른 횃불이 비추리",
+        "strength": "은유, 명령형"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "학교",
+        "contestTitle": "개교 80주년 기념",
+        "contestWinner": "도전하는 오늘의 그대가 가천의 무한한 내일이다",
+        "strength": "학생 중심의 미래 비전"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "학교",
+        "contestTitle": "개교 70주년 기념",
+        "contestWinner": "진리를 향한 발걸음, 미래를 여는 CKU",
+        "strength": "전통과 비전의 연결"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "학교",
+        "contestTitle": "개교 170주년 기념",
+        "contestWinner": "나아가라, 세상의 빛이 되기까지. 도전해라, 세계를 밝힐 때까지",
+        "strength": "전통과 비전의 연결"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "학교",
+        "contestTitle": "일반 슬로건 공모전",
+        "contestWinner": "THE ONE, SEOWON!",
+        "strength": "현대적, 글로벌 지향"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "보훈캐릭터 네이밍 공모전",
+        "contestWinner": "보보 (保報)",
+        "strength": "인간미, 접근성"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "제주청소년활동진흥센터 브랜드 네이밍 공모전",
+        "contestWinner": "제주청소년드림팜 (우수상)",
+        "strength": "긍정적 가치 부여, 비전 제시"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "제주청소년활동진흥센터 브랜드 네이밍 공모전",
+        "contestWinner": "청소년동행터 (장려상)",
+        "strength": "관계 지향성, 포용성"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "제주청소년활동진흥센터 브랜드 네이밍 공모전",
+        "contestWinner": "제주청소년꿈터 (장려상)",
+        "strength": "직관성, 열망 자극"
+    }
+]

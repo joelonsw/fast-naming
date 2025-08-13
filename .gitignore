@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Data directories
+examples/
+result/
+
+# JSON files (but allow specific ones)
+*.json
+!examples/examples.json
+!config.json
+!package.json
