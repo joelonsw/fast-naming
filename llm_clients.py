@@ -359,7 +359,7 @@ class LLMOrchestrator:
         # Select 3 random examples
         selected_examples = random.sample(successful_examples, min(3, len(successful_examples)))
         
-        prompt = f"{contest_data['contestTitle']} 공모전에 참여하여 수상 확률이 가장 높은 3가지 {contest_data['contestType']}을 만드세요.\n\n"
+        prompt = f"{contest_data['contestTitle']}에 참여하여 수상 확률이 가장 높은 3가지 {contest_data['contestType']}을 만드세요.\n\n"
         prompt += f"<contest_description>\n{contest_data['contestContent']}\n</contest_description>\n\n"
         
         prompt += "앞서 비슷한 유형의 공모전에서 수상한 작품들을 참고하세요.\n"
@@ -370,29 +370,28 @@ class LLMOrchestrator:
             prompt += f"<strength{i}>\n{example['strength']}\n</strength{i}>\n\n"
         
         prompt += "guidelines:\n"
-        prompt += f"1. {contest_data['contestContent']}에 있는 요구사항을 모두 준수해야 합니다.\n"
-        prompt += f"2. {contest_data['contestHeldBy']}에서 좋아할 작명이여야 합니다.\n"
-        prompt += "3. submission은 반드시 한 문장의 슬로건/네이밍만 포함해야 합니다.\n"
-        prompt += "4. description은 해당 작명을 생성한 이유와 특징을 설명해야 합니다.\n\n"
+        prompt += f"1. {contest_data['contestTitle']}에서 수상할 작품 10가지를 브레인스토밍하세요.\n"
+        prompt += f"2. 10가지 브레인스토밍 된 작품 중에 제일 퀄리티가 좋은 작품 3가지를 선택하세요.\n"
+        prompt += f"3. submission에 하나의 {contest_data['contestType']}만 포함해야 합니다.\n"
+        prompt += f"4. description에 해당 {contest_data['contestType']}을 생성한 이유와 특징을 설명해야 합니다.\n\n"
         
         prompt += "반드시 다음 JSON 형식으로만 응답하세요:\n"
-        prompt += '''```json
+        prompt += f'''```json
 [
-    {
-        "submission": "슬로건/네이밍 한 문장",
+    {{
+        "submission": "하나의 {contest_data['contestType']}",
         "description": "해당 작명을 생성한 이유와 특징 설명"
-    },
-    {
-        "submission": "슬로건/네이밍 한 문장",
+    }},
+    {{
+        "submission": "하나의 {contest_data['contestType']}",
         "description": "해당 작명을 생성한 이유와 특징 설명"
-    },
-    {
-        "submission": "슬로건/네이밍 한 문장",
+    }},
+    {{
+        "submission": "하나의 {contest_data['contestType']}",
         "description": "해당 작명을 생성한 이유와 특징 설명"
-    }
+    }}
 ]
 ```'''
-        
         return prompt
     
     def _parse_response(self, response: str) -> List[Dict[str, str]]:
