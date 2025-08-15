@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Naming - AI 공모전 작명 서비스</title>
+    <link rel="stylesheet" href="/static/home.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏆 Fast Naming</h1>
+            <p class="subtitle">AI가 생성하는 최적의 공모전 작명</p>
+        </header>
+
+        <main class="main-content">
+            <div class="form-container">
+                <h2>📝 공모전 정보 입력</h2>
+                <form id="contestForm" class="contest-form">
+                    <div class="form-group">
+                        <label for="contestTitle">공모전명 *</label>
+                        <input type="text" id="contestTitle" name="contestTitle" required 
+                               placeholder="예: 2025년 GBDC 혁신 슬로건 공모전">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="contestContent">공모전 내용 *</label>
+                        <textarea id="contestContent" name="contestContent" required rows="4"
+                                  placeholder="공모전의 상세 내용을 입력하세요..."></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="contestHeldBy">주최기관 *</label>
+                            <input type="text" id="contestHeldBy" name="contestHeldBy" required
+                                   placeholder="예: 경상북도개발공사">
+                        </div>
+                        <div class="form-group">
+                            <label for="contestType">공모전 유형 *</label>
+                            <select id="contestType" name="contestType" required>
+                                <option value="">선택하세요</option>
+                                <option value="네이밍">네이밍</option>
+                                <option value="슬로건">슬로건</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="contestHeldByType">기관 유형 *</label>
+                            <select id="contestHeldByType" name="contestHeldByType" required>
+                                <option value="">선택하세요</option>
+                                <option value="공공기관">공공기관</option>
+                                <option value="사기업">사기업</option>
+                                <option value="학교">학교</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="contestCriteria">선택 기준 (선택사항)</label>
+                            <input type="text" id="contestCriteria" name="contestCriteria"
+                                   placeholder="예: 창의성, 기억하기 쉬움">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" id="submitBtn" class="submit-btn">
+                            <span class="btn-text">🎯 작명 생성하기</span>
+                            <span class="btn-loading" style="display: none;">
+                                <div class="spinner"></div>
+                                생성 중...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 결과 섹션 -->
+            <div id="resultSection" class="result-section" style="display: none;">
+                <h2>✅ 생성 완료!</h2>
+                <div class="result-info">
+                    <div class="result-item">
+                        <label>결과 파일:</label>
+                        <span id="resultFile"></span>
+                    </div>
+                    <div class="result-item">
+                        <label>총 작명 수:</label>
+                        <span id="totalSubmissions"></span>
+                    </div>
+                    <div class="result-item">
+                        <label>생성 시간:</label>
+                        <span id="generationTime"></span>
+                    </div>
+                </div>
+                <div class="result-actions">
+                    <button id="viewResultBtn" class="view-btn">📊 결과 보기</button>
+                    <button id="newRequestBtn" class="new-btn">🔄 새 요청</button>
+                </div>
+            </div>
+
+            <!-- 오류 섹션 -->
+            <div id="errorSection" class="error-section" style="display: none;">
+                <h2>❌ 오류가 발생했습니다</h2>
+                <p id="errorMessage"></p>
+                <button onclick="hideError()" class="retry-btn">다시 시도</button>
+            </div>
+        </main>
+
+        <!-- 예시 섹션 -->
+        <section class="examples-section">
+            <h2>📚 예시 요청</h2>
+            <div class="examples-grid">
+                <div class="example-card" onclick="fillExample('naming')">
+                    <h3>작명 공모전</h3>
+                    <p><strong>공모전명:</strong> 2024년 AI 스타트업 브랜드명 공모전</p>
+                    <p><strong>주최:</strong> 테크스타트업협회</p>
+                    <p><strong>유형:</strong> 작명 | 기업</p>
+                </div>
+                <div class="example-card" onclick="fillExample('slogan')">
+                    <h3>슬로건 공모전</h3>
+                    <p><strong>공모전명:</strong> 2025년 GBDC 혁신 슬로건 공모전</p>
+                    <p><strong>주최:</strong> 경상북도개발공사</p>
+                    <p><strong>유형:</strong> 슬로건 | 공공기관</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/home.js"></script>
+</body>
+</html>

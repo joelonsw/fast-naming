@@ -240,4 +240,127 @@ function showError(message) {
 }
 
 // Initialize when page loads
-document.addEventListener('DOMContentLoaded', loadResultData);
+document.addEventListener('DOMContentLoaded', () => {
+    loadResultData();
+    initializeEvaluation();
+});
+
+// Initialize evaluation functionality
+function initializeEvaluation() {
+    const evaluateButton = document.getElementById('evaluateButton');
+    if (evaluateButton) {
+        evaluateButton.addEventListener('click', handleEvaluationClick);
+    }
+}
+
+// Handle evaluation button click
+async function handleEvaluationClick() {
+    const resultNumber = getResultNumber();
+    const evaluateButton = document.getElementById('evaluateButton');
+    const evaluationStatus = document.getElementById('evaluationStatus');
+    const evaluationResultDiv = document.getElementById('evaluationResult');
+
+    evaluationStatus.textContent = '🤖 AI 채점을 시작합니다... (최대 1분 소요)';
+    evaluationStatus.style.color = '#007bff';
+    evaluationResultDiv.innerHTML = '';
+    evaluateButton.disabled = true;
+    evaluateButton.textContent = '채점 중...';
+
+    try {
+        const response = await fetch('/evaluate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ result_number: parseInt(resultNumber) }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        evaluationStatus.textContent = '✅ 채점이 완료되었습니다! 결과를 불러옵니다...';
+        evaluationStatus.style.color = '#28a745';
+
+        await loadAndDisplayScores(resultNumber);
+
+    } catch (error) {
+        console.error('Evaluation failed:', error);
+        evaluationStatus.textContent = `❌ 채점 실패: ${error.message}`;
+        evaluationStatus.style.color = '#dc3545';
+    } finally {
+        evaluateButton.disabled = false;
+        evaluateButton.textContent = '🤖 AI 채점 다시하기';
+    }
+}
+
+// Load and display score data
+async function loadAndDisplayScores(scoreNumber) {
+    try {
+        const response = await fetch(`/api/score/${scoreNumber}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const scoreData = await response.json();
+        displayEvaluationResults(scoreData);
+    } catch (error) {
+        console.error('Error loading score data:', error);
+        const evaluationStatus = document.getElementById('evaluationStatus');
+        evaluationStatus.textContent = `❌ 점수 데이터 로드 실패: ${error.message}`;
+        evaluationStatus.style.color = '#dc3545';
+    }
+}
+
+// Display evaluation results in a table
+function displayEvaluationResults(scoreData) {
+    const container = document.getElementById('evaluationResult');
+    container.innerHTML = '';
+
+    if (!scoreData || !scoreData.submissions || scoreData.submissions.length === 0) {
+        container.innerHTML = '<p>채점 결과가 없습니다.</p>';
+        return;
+    }
+
+    const criteria = scoreData.evaluation_criteria || {};
+    const criteriaKeys = Object.keys(criteria);
+    const submissions = scoreData.submissions;
+
+    const table = document.createElement('table');
+    table.className = 'evaluation-table';
+
+    // Create table header
+    const thead = document.createElement('thead');
+    let headerHtml = '<tr><th>순위</th><th>작명</th><th>설명</th>';
+    criteriaKeys.forEach(key => {
+        headerHtml += `<th>${key} (${criteria[key]}점)</th>`;
+    });
+    headerHtml += '<th>총점</th><th>코멘트</th></tr>';
+    thead.innerHTML = headerHtml;
+    table.appendChild(thead);
+
+    // Create table body
+    const tbody = document.createElement('tbody');
+    submissions.forEach((submission, index) => {
+        const row = document.createElement('tr');
+        let rowHtml = `
+            <td>${index + 1}</td>
+            <td>${submission.submission}</td>
+            <td>${submission.description}</td>
+        `;
+        criteriaKeys.forEach(key => {
+            rowHtml += `<td>${submission.score[key] || 0}</td>`;
+        });
+        rowHtml += `
+            <td><strong>${submission.total_score || 0}</strong></td>
+            <td>${submission.comments || 'N/A'}</td>
+        `;
+        row.innerHTML = rowHtml;
+        tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+
+    container.appendChild(table);
+}
+

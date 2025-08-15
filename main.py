@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Union, List, Dict, Optional
 from contest_processor import create_contest_processor
+from evaluator import create_contest_evaluator
 
 # 로깅 설정
 logging.basicConfig(
@@ -23,7 +24,22 @@ if os.path.exists("frontend"):
 
 @app.get("/")
 async def root():
-    return {"message": "Hello World"}
+    """Serve the home page for contest submission."""
+    try:
+        # Check if frontend directory exists
+        if not os.path.exists("frontend"):
+            raise HTTPException(status_code=404, detail="Frontend not found")
+        
+        # Check if the home HTML file exists
+        html_path = "frontend/home.html"
+        if not os.path.exists(html_path):
+            raise HTTPException(status_code=404, detail="Home page not found")
+        
+        return FileResponse(html_path, media_type="text/html")
+        
+    except Exception as e:
+        logger.error(f"Error serving home page: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 class Item(BaseModel):
     name: str
@@ -166,6 +182,7 @@ async def test_llm_generation(request: ContestRequest):
     try:
         from llm_clients import create_llm_orchestrator
         from contest_processor import create_contest_processor
+        from evaluator import create_contest_evaluator
         
         logger.info("🧪 LLM 테스트 시작")
         
@@ -234,7 +251,7 @@ async def get_result_page(result_number: int):
             raise HTTPException(status_code=404, detail="Frontend not found")
         
         # Check if the HTML file exists
-        html_path = "frontend/index.html"
+        html_path = "frontend/result.html"
         if not os.path.exists(html_path):
             raise HTTPException(status_code=404, detail="Frontend page not found")
         
@@ -266,4 +283,129 @@ async def get_result_data(result_number: int):
         raise
     except Exception as e:
         logger.error(f"Error reading result {result_number}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# Evaluation endpoints
+class EvaluationRequest(BaseModel):
+    result_number: int
+
+class EvaluationResponse(BaseModel):
+    success: bool
+    message: str
+    score_file: Optional[str] = None
+    total_submissions: Optional[int] = None
+    evaluation_criteria: Optional[Dict[str, int]] = None
+
+@app.post("/evaluate", response_model=EvaluationResponse)
+async def evaluate_contest_submissions(request: EvaluationRequest):
+    """Evaluate contest submissions using LLM-based scoring."""
+    logger.info(f"🎯 POST /evaluate API 호출 시작: result_number={request.result_number}")
+    
+    try:
+        # Load the result file
+        result_file = f"result/result{request.result_number:04d}.json"
+        
+        if not os.path.exists(result_file):
+            logger.error(f"❌ Result file not found: {result_file}")
+            raise HTTPException(status_code=404, detail=f"Result {request.result_number} not found")
+        
+        logger.info(f"📂 1단계: 결과 파일 로드 시작: {result_file}")
+        with open(result_file, 'r', encoding='utf-8') as f:
+            result_data = json.load(f)
+        
+        contest_data = result_data.get('contest_data', {})
+        submissions = result_data.get('submissions', [])
+        
+        if not submissions:
+            logger.error("❌ No submissions found in result file")
+            raise HTTPException(status_code=400, detail="No submissions found in result file")
+        
+        logger.info(f"✅ 결과 파일 로드 완료: {len(submissions)}개 작명")
+        
+        # Create evaluator
+        logger.info("🔧 2단계: 평가기 생성 시작")
+        evaluator = create_contest_evaluator()
+        logger.info("✅ 평가기 생성 완료")
+        
+        # Check if criteria already exists
+        existing_criteria = contest_data.get('contestCriteria')
+        
+        # Generate evaluation criteria if not exists
+        logger.info("📊 3단계: 평가 기준 생성 시작")
+        if existing_criteria:
+            criteria = existing_criteria
+            logger.info(f"✅ 기존 평가 기준 사용: {criteria}")
+        else:
+            criteria = evaluator.generate_criteria(
+                contest_data.get('contestTitle', ''),
+                contest_data.get('contestContent', '')
+            )
+            logger.info(f"✅ 새로운 평가 기준 생성: {criteria}")
+        
+        # Evaluate submissions
+        logger.info("🎯 4단계: 작명 평가 시작")
+        evaluated_submissions = evaluator.evaluate_submissions(
+            contest_data.get('contestTitle', ''),
+            contest_data.get('contestContent', ''),
+            submissions,
+            criteria
+        )
+        logger.info(f"✅ 작명 평가 완료: {len(evaluated_submissions)}개 작명")
+        
+        # Save evaluation results
+        logger.info("💾 5단계: 평가 결과 저장 시작")
+        score_file = evaluator.save_evaluation_result(
+            request.result_number,
+            evaluated_submissions,
+            criteria,
+            contest_data
+        )
+        logger.info(f"✅ 평가 결과 저장 완료: {score_file}")
+        
+        # Calculate statistics
+        total_score = sum(sub.get('total_score', 0) for sub in evaluated_submissions)
+        avg_score = total_score / len(evaluated_submissions) if evaluated_submissions else 0
+        
+        logger.info(f"📈 6단계: 통계 생성 완료 - 총점: {total_score}, 평균: {avg_score:.2f}")
+        
+        # Return response
+        response = EvaluationResponse(
+            success=True,
+            message="Contest submissions evaluated successfully",
+            score_file=score_file,
+            total_submissions=len(evaluated_submissions),
+            evaluation_criteria=criteria
+        )
+        
+        logger.info(f"🎉 평가 완료! {len(evaluated_submissions)}개 작명 평가됨")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 평가 중 오류 발생: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to evaluate submissions: {str(e)}")
+
+@app.get("/api/score/{score_number}")
+async def get_score_data(score_number: int):
+    """Get score data for the frontend."""
+    try:
+        # Construct the score file path
+        score_file = f"result/score{score_number:04d}.json"
+        
+        # Check if the score file exists
+        if not os.path.exists(score_file):
+            raise HTTPException(status_code=404, detail=f"Score {score_number} not found")
+        
+        # Read and return the score data
+        with open(score_file, 'r', encoding='utf-8') as f:
+            score_data = json.load(f)
+        
+        logger.info(f"✅ Score {score_number} data served successfully")
+        return score_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reading score {score_number}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

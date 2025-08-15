@@ -10,4 +10,5 @@ dependencies = [
     "azure-ai-inference>=1.0.0b9",
     "google-generativeai>=0.3.0",
     "uvicorn>=0.35.0",
+    "google-ai-generativelanguage>=0.3.0",
 ]
