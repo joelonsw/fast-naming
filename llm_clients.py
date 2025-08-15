@@ -279,6 +279,7 @@ class LLMOrchestrator:
         
         total_attempts = 0
         successful_attempts = 0
+        last_logged_model = None
         
         for provider_name, provider_info in self.clients.items():
             logger.info(f"🤖 {provider_name} 제공자 처리 시작")
@@ -290,9 +291,9 @@ class LLMOrchestrator:
                 for i in range(num_iterations):
                     total_attempts += 1
                     try:
-                        # Randomly select temperature and top_p
-                        temperature = random.choice(temperature_variations)
-                        top_p = random.choice(top_p_variations)
+                        # Use deterministic temperature and top_p based on iteration
+                        temperature = temperature_variations[i % len(temperature_variations)]
+                        top_p = top_p_variations[i % len(top_p_variations)]
                         
                         logger.info(f"🔄 {provider_name}/{model} - 반복 {i+1}/{num_iterations} (temp={temperature}, top_p={top_p})")
                         
@@ -300,6 +301,13 @@ class LLMOrchestrator:
                         system_prompt = self._create_system_prompt(contest_data)
                         user_prompt = self._create_user_prompt(contest_data, successful_examples)
                         
+                        # Log prompts only when the model changes
+                        if model != last_logged_model:
+                            logger.info(f"✨ New prompt for model '{model}':")
+                            logger.info(f"SYSTEM PROMPT:\n{system_prompt}")
+                            logger.info(f"USER PROMPT:\n{user_prompt}")
+                            last_logged_model = model
+
                         # Generate response
                         response = client.generate(
                             system_prompt=system_prompt,
