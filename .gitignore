@@ -14,7 +14,3 @@ examples/
 result/
 
 # JSON files (but allow specific ones)
-*.json
-!examples/examples.json
-!config.json
-!package.json
