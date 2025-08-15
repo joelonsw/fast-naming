@@ -11,4 +11,5 @@ dependencies = [
     "google-generativeai>=0.3.0",
     "uvicorn>=0.35.0",
     "google-ai-generativelanguage>=0.3.0",
+    "together>=1.5.25",
 ]

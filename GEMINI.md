@@ -185,6 +185,28 @@ guidelines:
         print(response.text)
         ```
 
+- https://api.together.ai/models/lgai/exaone-3-5-32b-instruct
+    - 사용할 모델
+        - lgai/exaone-deep-32b
+        - lgai/exaone-3-5-32b-instruct
+    - 예시 연동 코드
+        ```python
+        from together import Together
+
+        client = Together()
+
+        response = client.chat.completions.create(
+            model="lgai/exaone-3-5-32b-instruct",
+            messages=[
+            {
+                "role": "user",
+                "content": "What are some fun things to do in New York?"
+            }
+            ]
+        )
+        print(response.choices[0].message.content)
+        ```
+
 ## 2. POST /evaluate
 ### 1. 결과 페이지에서 해당 API 호출
 - 사용자가 특정 결과 페이지에서 평가하기 버튼을 눌렀을 때 호출됩니다. 

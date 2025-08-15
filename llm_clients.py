@@ -1,7 +1,9 @@
+
 """
 LLM Clients for multiple providers (GitHub AI, Groq, Google Gemini)
 This module provides unified interfaces for different LLM providers.
 """
+
 
 import os
 import json
@@ -30,6 +32,13 @@ try:
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
+
+# Together AI imports
+try:
+    from together import Together
+    TOGETHER_AVAILABLE = True
+except ImportError:
+    TOGETHER_AVAILABLE = False
 
 
 class LLMClient(ABC):
@@ -151,6 +160,53 @@ class GeminiClient(LLMClient):
             raise Exception(f"Gemini generation failed: {str(e)}")
 
 
+class TogetherClient(LLMClient):
+    """Together AI LLM client."""
+    
+    def __init__(self, api_key: Optional[str] = None):
+        if not TOGETHER_AVAILABLE:
+            raise ImportError("Together AI dependencies not available. Install `together`")
+        
+        self.api_key = api_key or os.getenv("TOGETHER_API_KEY")
+        if not self.api_key:
+            raise ValueError("TOGETHER_API_KEY environment variable must be set")
+        
+        self.client = Together(api_key=self.api_key)
+    
+    def generate(self, system_prompt: str, user_prompt: str, **kwargs) -> str:
+        """Generate response using Together AI."""
+        try:
+            model = kwargs.get("model", "lgai/exaone-deep-32b")
+            temperature = kwargs.get("temperature", 1.0)
+            max_tokens = kwargs.get("max_tokens", 8192)
+            top_p = kwargs.get("top_p", 1.0)
+            
+            logger.info(f"🚀 Together AI API 호출: model={model}, temp={temperature}, top_p={top_p}")
+            
+            # Combine system and user prompts
+            # Together API uses a similar message format to OpenAI
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+            )
+            
+            content = response.choices[0].message.content
+            logger.info(f"✅ Together AI API 응답 수신: {len(content)}자")
+            return content
+            
+        except Exception as e:
+            logger.error(f"❌ Together AI API 오류: {str(e)}")
+            raise Exception(f"Together AI generation failed: {str(e)}")
+
+
 class LLMOrchestrator:
     """Orchestrator for managing multiple LLM clients and generating contest submissions."""
     
@@ -173,7 +229,6 @@ class LLMOrchestrator:
                     "deepseek-r1-distill-llama-70b", 
                     "llama-3.3-70b-versatile",
                     "gemma2-9b-it",
-                    "meta-llama/llama-prompt-guard-2-86m",
                     "qwen/qwen3-32b"
                 ]
             }
@@ -183,14 +238,6 @@ class LLMOrchestrator:
         
         # GitHub AI 클라이언트 비활성화 (속도 제한 문제로 인해)
         logger.info("⚠️ GitHub AI 클라이언트 비활성화 (속도 제한 문제)")
-        # try:
-        #     self.clients["github_ai"] = {
-        #         "client": GitHubAIClient(),
-        #         "models": ["openai/gpt-5", "microsoft/Phi-4", "deepseek/DeepSeek-R1-0528"]
-        #     }
-        #     logger.info("✅ GitHub AI 클라이언트 초기화 성공")
-        # except Exception as e:
-        #     logger.error(f"❌ GitHub AI 클라이언트 초기화 실패: {e}")
         
         # Initialize Gemini client
         try:
@@ -201,6 +248,16 @@ class LLMOrchestrator:
             logger.info("✅ Gemini 클라이언트 초기화 성공")
         except Exception as e:
             logger.error(f"❌ Gemini 클라이언트 초기화 실패: {e}")
+            
+        # Initialize Together AI client
+        try:
+            self.clients["together"] = {
+                "client": TogetherClient(),
+                "models": ["lgai/exaone-deep-32b", "lgai/exaone-3-5-32b-instruct"]
+            }
+            logger.info("✅ Together AI 클라이언트 초기화 성공")
+        except Exception as e:
+            logger.error(f"❌ Together AI 클라이언트 초기화 실패: {e}")
         
         logger.info(f"📊 초기화된 클라이언트: {list(self.clients.keys())}")
     
@@ -285,9 +342,9 @@ class LLMOrchestrator:
     
     def _create_system_prompt(self, contest_data: Dict[str, Any]) -> str:
         """Create system prompt for contest submission generation."""
-        return """당신은 대한민국 최고의 네이미스트입니다. 
+        return '''당신은 대한민국 최고의 네이미스트입니다. 
 당신은 주최측이 원하는 네이밍을 무조건 제공하는 네이미스트입니다.
-반드시 JSON 형식으로만 응답해야 합니다."""
+반드시 JSON 형식으로만 응답해야 합니다.'''
     
     def _create_user_prompt(self, contest_data: Dict[str, Any], successful_examples: List[Dict[str, str]]) -> str:
         """Create user prompt with few-shot examples."""
@@ -311,7 +368,7 @@ class LLMOrchestrator:
         prompt += "4. description은 해당 작명을 생성한 이유와 특징을 설명해야 합니다.\n\n"
         
         prompt += "반드시 다음 JSON 형식으로만 응답하세요:\n"
-        prompt += """```json
+        prompt += '''```json
 [
     {
         "submission": "슬로건/네이밍 한 문장",
@@ -326,7 +383,7 @@ class LLMOrchestrator:
         "description": "해당 작명을 생성한 이유와 특징 설명"
     }
 ]
-```"""
+```'''
         
         return prompt
     
@@ -457,3 +514,4 @@ class LLMOrchestrator:
 def create_llm_orchestrator() -> LLMOrchestrator:
     """Create and return an LLM orchestrator instance."""
     return LLMOrchestrator()
+

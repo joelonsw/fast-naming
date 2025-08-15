@@ -18,13 +18,20 @@ document.getElementById('contestForm').addEventListener('submit', async function
     try {
         // Get form data
         const formData = new FormData(e.target);
+        const criteriaData = getCriteriaData();
+
+        // Validate criteria total
+        if (criteriaData.total !== 100 && criteriaData.total !== 0) {
+            throw new Error(`평가 기준의 총점은 100이 되어야 합니다. (현재: ${criteriaData.total})`);
+        }
+
         const requestData = {
             contestTitle: formData.get('contestTitle'),
             contestContent: formData.get('contestContent'),
             contestHeldBy: formData.get('contestHeldBy'),
             contestType: formData.get('contestType'),
             contestHeldByType: formData.get('contestHeldByType'),
-            contestCriteria: formData.get('contestCriteria') || null
+            contestCriteria: Object.keys(criteriaData.criteria).length > 0 ? criteriaData.criteria : null
         };
         
         // Validate required fields
@@ -130,6 +137,11 @@ document.getElementById('newRequestBtn').addEventListener('click', function() {
     // Reset form
     document.getElementById('contestForm').reset();
     
+    // Clear criteria
+    const criteriaContainer = document.getElementById('criteriaContainer');
+    criteriaContainer.innerHTML = '';
+    updateCriteriaTotal();
+
     // Hide result and error sections
     hideResult();
     hideError();
@@ -141,26 +153,108 @@ document.getElementById('newRequestBtn').addEventListener('click', function() {
 // Example fillers
 function fillExample(type) {
     const form = document.getElementById('contestForm');
+    const criteriaContainer = document.getElementById('criteriaContainer');
+    criteriaContainer.innerHTML = ''; // Clear existing criteria
     
     if (type === 'naming') {
-        form.contestTitle.value = '2024년 AI 스타트업 브랜드명 공모전';
-        form.contestContent.value = 'AI 기술을 활용한 혁신적인 스타트업의 브랜드명을 공모합니다. 기술적 혁신성과 시장 친화성을 모두 갖춘 브랜드명을 제안해주세요.';
-        form.contestHeldBy.value = '테크스타트업협회';
-        form.contestType.value = '작명';
-        form.contestHeldByType.value = '기업';
-        form.contestCriteria.value = '창의성, 기억하기 쉬움, 브랜드 가치 전달';
+        form.contestTitle.value = '여기어때 전용서체 네이밍 공모전';
+        form.contestContent.value = '여기어때의 아이덴티티를 담은 새로운 글꼴의 이름을 지어주세요. 여행의 설렘과 즐거움을 담은 위트있는 이름이면 좋습니다.';
+        form.contestHeldBy.value = '여기어때';
+        form.contestType.value = '네이밍';
+        form.contestHeldByType.value = '사기업';
+        addCriteriaInput('창의성', 40);
+        addCriteriaInput('주제 적합성', 30);
+        addCriteriaInput('기억 용이성', 20);
+        addCriteriaInput('대중성', 10);
     } else if (type === 'slogan') {
         form.contestTitle.value = '2025년 GBDC 혁신 슬로건 공모전';
         form.contestContent.value = '제시된 키워드 활용한 GBDC형 혁신 슬로건 제작 소통, 체감, 공정, 디지털, 변화, 실용, 지속가능, 협력, 투명, 공유, 지역상생 ·제시된 11개 키워드 중 2개 이상의 키워드를 활용하여, 슬로건을 제작한 후 신청 접수해주시기 바랍니다.';
         form.contestHeldBy.value = '경상북도개발공사';
         form.contestType.value = '슬로건';
         form.contestHeldByType.value = '공공기관';
-        form.contestCriteria.value = '키워드 활용, 혁신성, 지역 특성 반영';
+        addCriteriaInput('주제 적합성', 40);
+        addCriteriaInput('창의성', 30);
+        addCriteriaInput('활용성', 20);
+        addCriteriaInput('기억 용이성', 10);
     }
     
+    updateCriteriaTotal();
     // Scroll to form
     form.scrollIntoView({ behavior: 'smooth' });
 }
+
+// --- Criteria Editor ---
+function initializeCriteriaEditor() {
+    const addCriteriaBtn = document.getElementById('addCriteriaBtn');
+    const criteriaContainer = document.getElementById('criteriaContainer');
+
+    addCriteriaBtn.addEventListener('click', () => addCriteriaInput());
+
+    criteriaContainer.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-criteria-btn')) {
+            e.target.closest('.criteria-item').remove();
+            updateCriteriaTotal();
+        }
+    });
+
+    criteriaContainer.addEventListener('input', function(e) {
+        if (e.target.classList.contains('criteria-score')) {
+            updateCriteriaTotal();
+        }
+    });
+}
+
+function addCriteriaInput(name = '', score = '') {
+    const criteriaContainer = document.getElementById('criteriaContainer');
+    const newItem = document.createElement('div');
+    newItem.className = 'criteria-item';
+    newItem.innerHTML = `
+        <input type="text" class="criteria-name" placeholder="배점 기준" value="${name}">
+        <input type="number" class="criteria-score" placeholder="점수" value="${score}" min="0" max="100">
+        <button type="button" class="remove-criteria-btn">✖</button>
+    `;
+    criteriaContainer.appendChild(newItem);
+}
+
+function updateCriteriaTotal() {
+    const totalScoreEl = document.getElementById('criteriaTotalScore');
+    const scoreInputs = document.querySelectorAll('.criteria-score');
+    let total = 0;
+    scoreInputs.forEach(input => {
+        total += parseInt(input.value) || 0;
+    });
+    totalScoreEl.textContent = total;
+    if (total === 100 || total === 0) {
+        totalScoreEl.parentElement.style.color = '#28a745'; // Green
+    } else {
+        totalScoreEl.parentElement.style.color = '#dc3545'; // Red
+    }
+}
+
+function getCriteriaData() {
+    const criteriaItems = document.querySelectorAll('.criteria-item');
+    const criteria = {};
+    let total = 0;
+    let isValid = true;
+    criteriaItems.forEach(item => {
+        const name = item.querySelector('.criteria-name').value.trim();
+        const score = parseInt(item.querySelector('.criteria-score').value) || 0;
+        if (name && score > 0) {
+            criteria[name] = score;
+            total += score;
+        } else if (name || score > 0) {
+            // If one is filled but not the other
+            isValid = false;
+        }
+    });
+    if (!isValid) {
+        throw new Error('평가 기준의 이름과 점수를 모두 입력해주세요.');
+    }
+    return { criteria, total };
+}
+
+
+// --- General Page Logic ---
 
 // Form validation
 function validateForm() {
@@ -225,6 +319,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Focus on first input
     document.getElementById('contestTitle').focus();
     
+    // Initialize criteria editor
+    initializeCriteriaEditor();
+
     // Add some visual feedback for form interactions
     const form = document.getElementById('contestForm');
     form.addEventListener('change', function() {

@@ -43,9 +43,6 @@
                                 <option value="슬로건">슬로건</option>
                             </select>
                         </div>
-                    </div>
-
-                    <div class="form-row">
                         <div class="form-group">
                             <label for="contestHeldByType">기관 유형 *</label>
                             <select id="contestHeldByType" name="contestHeldByType" required>
@@ -55,10 +52,16 @@
                                 <option value="학교">학교</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="contestCriteria">선택 기준 (선택사항)</label>
-                            <input type="text" id="contestCriteria" name="contestCriteria"
-                                   placeholder="예: 창의성, 기억하기 쉬움">
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="contestCriteria">평가 기준 (선택사항)</label>
+                        <div id="criteriaContainer" class="criteria-container">
+                            <!-- Dynamic criteria inputs will be added here -->
+                        </div>
+                        <div class="criteria-actions">
+                            <button type="button" id="addCriteriaBtn" class="add-btn">✚ 기준 추가</button>
+                            <span class="criteria-total">총점: <span id="criteriaTotalScore">0</span> / 100</span>
                         </div>
                     </div>
 

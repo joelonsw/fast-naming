@@ -21,15 +21,7 @@ class ContestEvaluator:
             
             system_prompt = f"""당신은 {contest_title}의 심사위원입니다. 
 {contest_content}를 참고하여, 공모전의 공정한 평가기준을 마련하세요.
-평가 기준은 4가지로 마련하며, 각 평가기준의 총합은 100이 되어야 합니다.
-다음과 같이 json으로 생성하여 반환하세요.
-
-"contestCriteria": {{
-    "배점기준1": 10,
-    "배점기준2": 20,
-    "배점기준3": 30,
-    "배점기준4": 40,
-}}"""
+"""
 
             user_prompt = f"""당신은 {contest_title}의 심사위원입니다. 
 {contest_content}를 참고하여, 공모전의 공정한 평가기준을 마련하세요.
@@ -132,7 +124,11 @@ class ContestEvaluator:
     </submissions>
 
     각 submission에 대해 위의 평가 기준에 따라 점수를 매겨주세요. 
-    각 평가 항목에 대한 점수와 함께 총점을 계산하고, 각 작품에 대한 평가 코멘트를 150자 내외로 작성해주세요.
+    <score_criteria>
+    {criteria}
+    <score_criteria/>
+    각 평가 항목에 대한 점수와 함께 총점을 계산하고, 각 작품에 대한 평가 코멘트를 30자 내외로 작성해주세요.
+    각 평가 항목에 대한 총점은 100점입니다. 
     결과는 다음과 같은 JSON 형태로 반환해주세요:
 
     {{
