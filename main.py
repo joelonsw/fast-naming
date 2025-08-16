@@ -63,7 +63,7 @@ class ContestRequest(BaseModel):
     contestTitle: str
     contestContent: str
     contestHeldBy: str
-    contestType: str  # "슬로건" or "네이밍"
+    contestType: str  # "슬로건" or "네이밍" or "마스코트"
     contestHeldByType: str  # "공공기관", "사기업", "학교"
     contestCriteria: Optional[Dict[str, int]] = None
 
@@ -84,9 +84,9 @@ async def generate_contest_submissions(request: ContestRequest):
         logger.info("🔍 1단계: 요청 데이터 유효성 검증 시작")
         
         # Validate contest type
-        if request.contestType not in ["슬로건", "네이밍"]:
+        if request.contestType not in ["슬로건", "네이밍", "마스코트"]:
             logger.error(f"❌ contestType 유효성 검증 실패: {request.contestType}")
-            raise HTTPException(status_code=400, detail="contestType must be '슬로건' or '네이밍'")
+            raise HTTPException(status_code=400, detail="contestType must be '슬로건' or '네이밍' or '마스코트")
         
         # Validate held by type
         if request.contestHeldByType not in ["공공기관", "사기업", "학교"]:

@@ -182,35 +182,35 @@
         "strength": "긍정적 가치 부여, 비전 제시"
     },
     {
-        "contestType": "네이밍",
+        "contestType": "마스코트",
         "contestHeldByType": "대학",
         "contestTitle": "UNIST 마스코트",
         "contestWinner": "윤이 (Yoon-Y)",
         "strength": "유니콘 모티브로, 강인한 지성과 탐구 정신을 상징하며 학생들과 친근하게 소통"
     },
     {
-        "contestType": "네이밍",
+        "contestType": "마스코트",
         "contestHeldByType": "학교",
         "contestTitle": "고려대학교 대표 마스코트",
         "contestWinner": "환호 (Hwanho)",
         "strength": "고려대의 상징인 호랑이로, 강인함과 전통의 이미지 대표"
     },
     {
-        "contestType": "네이밍",
+        "contestType": "마스코트",
         "contestHeldByType": "학교",
         "contestTitle": "조선대학교 캐릭터",
         "contestWinner": "조아프렌즈 (Choa, Moodi, Pu)",
         "strength": "백학, 무등산, 소나무를 의인화하여 학교의 상징과 정체성을 친근하게 표현"
     },
     {
-        "contestType": "네이밍",
+        "contestType": "마스코트",
         "contestHeldByType": "학교",
         "contestTitle": "수원대학교 마스코트",
         "contestWinner": "패기",
         "strength": "전설 속 페가수스를 모티브로, 웅혼한 기상과 도전 정신을 시각화"
     },
     {
-        "contestType": "네이밍",
+        "contestType": "마스코트",
         "contestHeldByType": "학교",
         "contestTitle": "안산대학교 마스코트",
         "contestWinner": "안이·산이",
@@ -230,5 +230,75 @@
         "contestTitle": "강원관광재단 슬로건",
         "contestWinner": "특별한 여행, 강원더풀",
         "strength": "강원의 특별함 강조, 여행과 강원도/원더풀의 합성어로 창의적 기억성 강화"
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "경찰청 마스코트",
+        "contestWinner": "포돌이, 포순이",
+        "strength": "경찰을 뜻하는 영단어 'Police'의 '포'와 '조선시대 포도청'의 '포'를 따왔으며, 범인을 잡는다는 의미의 '포(捕)'를 연상시킵니다. 여기에 '돌이'와 '순이'라는 친근한 접미사를 붙여 경찰의 딱딱한 이미지를 완화하고 국민에게 친숙하게 다가가는 데 크게 성공했습니다."
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "중앙선거관리위원회 마스코트",
+        "contestWinner": "참참이",
+        "strength": "선거의 핵심 가치인 '참여'와 '참되다'의 '참'을 반복하여 사용했습니다. 이는 공정한 선거와 국민의 주권 행사를 독려하는 의미를 담고 있습니다. 발음이 쉽고 귀여워 어린이부터 노년층까지 모든 세대가 쉽게 기억하고 긍정적인 이미지를 갖게 합니다."
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "해양경찰청 공공기관 마스코트",
+        "contestWinner": "해우리·해누리",
+        "strength": "‘해(海)+우리/누리’의 조합으로 공동체·세계(누리) 지향을 표현. 바다 안전 수호라는 기관 미션과 언어적 합치가 높음."
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "산림청 공공기관 마스코트",
+        "contestWinner": "그루 (Groom)",
+        "strength": "산림청을 상징하는 캐릭터로 산림청의 방향과 이념, 비전을 대표하는 상징적 디자인으로 개발 되었다. 친근한 대중적 이미지와 포근한 표정을 하고있는 '그루'는 산림청의 미래 비전인 건강한 숲과 산림복지를 의미합니다."
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "기상청 공공기관 마스코트",
+        "contestWinner": "기상이",
+        "strength": "기관 핵심어 ‘기상(氣象)’에 인명형 접미(-이)를 붙여 친근화. 의미·기관명·발화의 일치로 설명이 필요 없는 네이밍."
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "한국도로공사 공공기관 마스코트",
+        "contestWinner": "길통이·차로차로",
+        "strength": "‘길이 잘 통한다’는 기능적 가치와 ‘차로’의 교통 전문성을 언어유희로 구현. 역할-이름 일치가 분명해 기억 지속력이 큼."
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "특허청 마스코트",
+        "contestWinner": "키키(KIKI), 포포(POPO)",
+        "strength": "특허청 영문명 'KIPO'에서 파생하여 기억하기 쉽고, 쌍둥이 로봇 컨셉으로 첨단기술과 지식재산을 상징적으로 표현. 음성학적으로도 발음이 용이"
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "한국수자원공사 마스코트",
+        "contestWinner": "방울이",
+        "strength": "물방울의 '방울'을 의인화하여 수자원공사의 핵심 업무인 물 관리를 직관적으로 표현하고, '~이' 접미사로 친근감 부여. 단순하면서도 명확한 정체성 구현"
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "방위사업청 마스코트",
+        "contestWinner": "위풍이, 당당이",
+        "strength": "'위풍당당'이라는 사자성어를 분리하여 각각 캐릭터화. 국방의 위엄과 당당함을 표현하면서도 친근한 '~이' 접미사로 국민과의 거리감 해소"
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "조달청 마스코트",
+        "contestWinner": "나르미, 달이",
+        "strength": "'나르다'(배달, 운송)의 의미와 '달이'(달성, 전달)로 조달청의 핵심 기능을 직관적으로 표현. 2025년 새롭게 리뉴얼되어 현대적 감각 반영"
     }
 ]

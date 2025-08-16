@@ -275,7 +275,8 @@ class AsyncLLMOrchestrator:
         logger.info(f"📊 설정: {len(self.clients)}개 제공자, {num_iterations}회 반복")
 
         tasks = []
-        temperature_variations = [0.85, 0.925, 1, 1.075, 1.15]
+        # temperature_variations = [0.85, 0.925, 1, 1.075, 1.15]
+        temperature_variations = [0.9, 0.95, 1, 1.05, 1.1]
 
         for provider_name, provider_info in self.clients.items():
             client = provider_info["client"]
@@ -355,7 +356,7 @@ class AsyncLLMOrchestrator:
 반드시 JSON 형식으로만 응답해야 합니다.'''
 
     def _create_user_prompt(self, contest_data: Dict[str, Any], successful_examples: List[Dict[str, str]]) -> str:
-        selected_examples = random.sample(successful_examples, min(2, len(successful_examples)))
+        selected_examples = random.sample(successful_examples, min(1, len(successful_examples)))
 
         prompt = f"{contest_data['contestTitle']}에 참여하여 수상 확률이 가장 높은 3가지 {contest_data['contestType']}을 만드세요.\n\n"
         prompt += f"<contest_description>\n{contest_data['contestContent']}\n</contest_description>\n\n"
