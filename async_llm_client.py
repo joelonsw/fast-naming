@@ -81,7 +81,8 @@ class AsyncGroqClient(AsyncLLMClient):
                 "temperature": temperature,
                 "max_completion_tokens": max_tokens,
                 "top_p": top_p,
-                "stream": False
+                "stream": False,
+                "response_format": {"type": "json_object"}
             }
 
             if model == "openai/gpt-oss-120b":
@@ -222,9 +223,7 @@ class AsyncLLMOrchestrator:
                 "client": AsyncGroqClient(),
                 "models": [
                     "openai/gpt-oss-120b",
-                    "deepseek-r1-distill-llama-70b",
                     "llama-3.3-70b-versatile",
-                    "gemma2-9b-it",
                     "qwen/qwen3-32b"
                 ]
             }
@@ -237,7 +236,7 @@ class AsyncLLMOrchestrator:
         try:
             self.clients["gemini"] = {
                 "client": AsyncGeminiClient(),
-                "models": ["gemini-2.5-flash"]
+                "models": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemma-3-27b-it"]
             }
             logger.info("✅ Gemini 클라이언트 초기화 성공")
         except Exception as e:
@@ -246,7 +245,7 @@ class AsyncLLMOrchestrator:
         try:
             self.clients["together"] = {
                 "client": AsyncTogetherClient(),
-                "models": ["lgai/exaone-deep-32b", "lgai/exaone-3-5-32b-instruct"]
+                "models": ["lgai/exaone-3-5-32b-instruct"]
             }
             logger.info("✅ Together AI 클라이언트 초기화 성공")
         except Exception as e:
@@ -265,8 +264,7 @@ class AsyncLLMOrchestrator:
         logger.info(f"📊 설정: {len(self.clients)}개 제공자, {num_iterations}회 반복")
 
         tasks = []
-        temperature_variations = [0.3, 0.5, 0.7, 0.9, 0.999]
-        top_p_variations = [0.7, 0.8, 0.9, 0.95, 0.999]
+        temperature_variations = [0.7, 0.85, 1, 1.15, 1.3]
 
         for provider_name, provider_info in self.clients.items():
             client = provider_info["client"]
@@ -274,7 +272,8 @@ class AsyncLLMOrchestrator:
             for model in models:
                 for i in range(num_iterations):
                     temperature = temperature_variations[i % len(temperature_variations)]
-                    top_p = top_p_variations[i % len(top_p_variations)]
+                    # top_p = top_p_variations[i % len(top_p_variations)]
+                    top_p = 0.99999
                     task = self._generate_single_submission(
                         client,
                         provider_name,

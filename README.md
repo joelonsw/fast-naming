@@ -112,8 +112,6 @@ guidelines:
 - https://github.com/marketplace/models/azure-openai/gpt-5/playground
     - 사용할 모델
         - openai/gpt-5
-        - microsoft/Phi-4
-        - deepseek/DeepSeek-R1-0528
     - 예시 연동 코드
         ```python
         import os
@@ -143,8 +141,9 @@ guidelines:
 - https://console.groq.com/keys
     - 사용할 모델
         - openai/gpt-oss-120b
-        - deepseek-r1-distill-llama-70b
         - llama-3.3-70b-versatile
+        - gemma2-9b-it
+        - qwen/qwen3-32b
     - 예시 연동 코드
         ```python
         from groq import Groq
