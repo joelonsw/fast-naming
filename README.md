@@ -252,7 +252,7 @@ guidelines:
 },
 ```
 - https://aistudio.google.com/prompts/new_chat
-    - 사용할 모델 : gemini-2.5-pro
+    - 사용할 모델 : gemini-2.5-flash
 - system prompt
 ```
 당신은 {{userInput.contentTitle}}의 심사위원입니다. 

@@ -9,19 +9,19 @@ import random
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from llm_clients import create_llm_orchestrator
+from async_llm_client import create_async_llm_orchestrator
 
 logger = logging.getLogger(__name__)
 
 
-class ContestProcessor:
+class AsyncContestProcessor:
     """Main processor for contest submission generation."""
     
     def __init__(self):
         logger.info("🔧 ContestProcessor 초기화 시작")
         self.examples_data = self._load_examples()
         logger.info(f"📚 예시 데이터 로드 완료: {len(self.examples_data)}개")
-        self.llm_orchestrator = create_llm_orchestrator()
+        self.llm_orchestrator = create_async_llm_orchestrator()
         logger.info("🤖 LLM Orchestrator 생성 완료")
         self.result_counter = self._get_next_result_number()
         logger.info(f"📁 다음 결과 파일 번호: {self.result_counter}")
@@ -103,7 +103,7 @@ class ContestProcessor:
         
         return matching_examples
     
-    def generate_submissions(self, contest_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def generate_submissions(self, contest_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate contest submissions using LLM orchestrator."""
         logger.info("🎯 작명 생성 프로세스 시작")
         
@@ -120,7 +120,7 @@ class ContestProcessor:
             
             # Generate submissions using LLM orchestrator
             logger.info("🤖 2단계: LLM을 통한 작명 생성 시작")
-            submissions = self.llm_orchestrator.generate_submissions(
+            submissions = await self.llm_orchestrator.generate_submissions(
                 contest_data=contest_data,
                 successful_examples=successful_examples,
                 num_iterations=5
@@ -212,6 +212,6 @@ class ContestProcessor:
 
 
 # Convenience function
-def create_contest_processor() -> ContestProcessor:
+def create_async_contest_processor() -> AsyncContestProcessor:
     """Create and return a contest processor instance."""
-    return ContestProcessor()
+    return AsyncContestProcessor()

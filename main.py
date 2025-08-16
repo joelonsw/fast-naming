@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Union, List, Dict, Optional
-from contest_processor import create_contest_processor
+from contest_processor import create_async_contest_processor
 from evaluator import create_contest_evaluator
 
 # 로깅 설정
@@ -97,7 +97,8 @@ async def generate_contest_submissions(request: ContestRequest):
         
         logger.info("🔧 2단계: Contest Processor 생성 시작")
         # Create contest processor
-        processor = create_contest_processor()
+        # processor = create_contest_processor()
+        processor = create_async_contest_processor()
         logger.info("✅ Contest Processor 생성 완료")
         
         logger.info("📊 3단계: 요청 데이터 변환")
@@ -114,7 +115,8 @@ async def generate_contest_submissions(request: ContestRequest):
         
         logger.info("🎯 4단계: 작명 생성 시작")
         # Generate submissions
-        result = processor.generate_submissions(contest_data)
+        # result = processor.generate_submissions(contest_data)
+        result = await processor.generate_submissions(contest_data)
         logger.info("✅ 작명 생성 완료")
         
         if "error" in result:
@@ -149,7 +151,8 @@ async def generate_contest_submissions(request: ContestRequest):
 async def get_generation_status():
     """Get status of submission generation."""
     try:
-        processor = create_contest_processor()
+        # processor = create_contest_processor()
+        processor = create_async_contest_processor()
         return {
             "status": "ready",
             "available_providers": list(processor.llm_orchestrator.clients.keys()),
@@ -180,14 +183,15 @@ async def debug_contest_request(request: ContestRequest):
 async def test_llm_generation(request: ContestRequest):
     """Test LLM generation with a single call."""
     try:
-        from llm_clients import create_llm_orchestrator
-        from contest_processor import create_contest_processor
+        from async_llm_client import create_async_llm_orchestrator
+        from contest_processor import create_async_contest_processor
         from evaluator import create_contest_evaluator
         
         logger.info("🧪 LLM 테스트 시작")
         
         # Create processor
-        processor = create_contest_processor()
+        # processor = create_contest_processor()
+        processor = create_async_contest_processor()
         
         # Convert request to dict
         contest_data = {
@@ -203,7 +207,8 @@ async def test_llm_generation(request: ContestRequest):
         successful_examples = processor.extract_successful_examples(contest_data)
         
         # Test with Groq only
-        orchestrator = create_llm_orchestrator()
+        # orchestrator = create_llm_orchestrator()
+        orchestrator = create_async_llm_orchestrator()
         if "groq" in orchestrator.clients:
             client = orchestrator.clients["groq"]["client"]
             model = orchestrator.clients["groq"]["models"][0]
@@ -213,7 +218,8 @@ async def test_llm_generation(request: ContestRequest):
             user_prompt = orchestrator._create_user_prompt(contest_data, successful_examples)
             
             logger.info("🤖 Groq API 호출 테스트")
-            response = client.generate(
+            # response = client.generate(
+            response = await client.generate(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 model=model,
@@ -350,7 +356,6 @@ async def evaluate_contest_submissions(request: EvaluationRequest):
             submissions,
             criteria
         )
-        logger.info(f"✅ 작명 평가 완료: {len(evaluated_submissions)}개 작명")
         
         # Save evaluation results
         logger.info("💾 5단계: 평가 결과 저장 시작")

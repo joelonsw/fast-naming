@@ -12,7 +12,7 @@ class ContestEvaluator:
     def __init__(self):
         """Initialize the contest evaluator with LLM clients."""
         self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.gemini_client = genai.GenerativeModel('gemini-2.5-flash')
+        self.gemini_client = genai.GenerativeModel('gemini-2.5-pro')
         
     def generate_criteria(self, contest_title: str, contest_content: str) -> Dict[str, int]:
         """Generate evaluation criteria using Groq GPT-OSS-120B model."""
@@ -141,12 +141,7 @@ class ContestEvaluator:
                 "temperature": 0.7,
                 "top_p": 0.95,
                 "iteration": 1,
-                "score": {{
-                    "{list(criteria.keys())[0]}": 0,
-                    "{list(criteria.keys())[1]}": 0,
-                    "{list(criteria.keys())[2]}": 0,
-                    "{list(criteria.keys())[3]}": 0
-                }},
+                "score": {json.dumps({k: 0 for k in criteria.keys()})},
                 "total_score": 0,
                 "comments": "평가 코멘트"
             }},
