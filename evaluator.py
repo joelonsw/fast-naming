@@ -12,7 +12,7 @@ class ContestEvaluator:
     def __init__(self):
         """Initialize the contest evaluator with LLM clients."""
         self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.gemini_client = genai.GenerativeModel('gemini-2.5-pro')
+        self.gemini_client = genai.GenerativeModel('gemini-2.5-flash')
         
     def generate_criteria(self, contest_title: str, contest_content: str) -> Dict[str, int]:
         """Generate evaluation criteria using Groq GPT-OSS-120B model."""
@@ -101,7 +101,7 @@ class ContestEvaluator:
     
     def evaluate_submissions(self, contest_title: str, contest_content: str, 
                         submissions: List[Dict], criteria: Optional[Dict[str, int]] = None) -> List[Dict]:
-        """Evaluate submissions using Gemini 2.5 Pro model."""
+        """Evaluate submissions using Gemini 2.5 flash model."""
         try:
             logger.info(f"🎯 작명 평가 시작: {len(submissions)}개 작명")
             
