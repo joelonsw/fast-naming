@@ -81,12 +81,14 @@ class AsyncGroqClient(AsyncLLMClient):
                 "temperature": temperature,
                 "max_completion_tokens": max_tokens,
                 "top_p": top_p,
-                "stream": False,
-                "response_format": {"type": "json_object"}
+                "stream": False
             }
 
             if model == "openai/gpt-oss-120b":
                 request_params["reasoning_effort"] = reasoning_effort
+
+            if model != "llama-3.3-70b-versatile":
+                request_params["response_format"] = {"type": "json_object"}
 
             completion = await self.client.chat.completions.create(**request_params)
 
@@ -119,7 +121,7 @@ class AsyncGitHubAIClient(AsyncLLMClient):
     async def generate(self, system_prompt: str, user_prompt: str, **kwargs) -> str:
         """Generate response using GitHub AI asynchronously."""
         try:
-            model = kwargs.get("model", "openai/gpt-5")
+            model = kwargs.get("model", "microsoft/Phi-4")
 
             response = await self.client.complete(
                 messages=[
@@ -251,6 +253,15 @@ class AsyncLLMOrchestrator:
         except Exception as e:
             logger.error(f"❌ Together AI 클라이언트 초기화 실패: {e}")
 
+        try:
+            self.clients["github"] = {
+                "client": AsyncGitHubAIClient(),
+                "models": ["microsoft/Phi-4"]
+            }
+            logger.info("✅ github AI 클라이언트 초기화 성공")
+        except Exception as e:
+            logger.error(f"❌ github AI 클라이언트 초기화 실패: {e}")
+
         logger.info(f"📊 초기화된 클라이언트: {list(self.clients.keys())}")
 
     async def generate_submissions(
@@ -264,7 +275,7 @@ class AsyncLLMOrchestrator:
         logger.info(f"📊 설정: {len(self.clients)}개 제공자, {num_iterations}회 반복")
 
         tasks = []
-        temperature_variations = [0.7, 0.85, 1, 1.15, 1.3]
+        temperature_variations = [0.85, 0.925, 1, 1.075, 1.15]
 
         for provider_name, provider_info in self.clients.items():
             client = provider_info["client"]

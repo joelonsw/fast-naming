@@ -41,9 +41,9 @@ class ContestEvaluator:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.3,
+                temperature=0.5,
                 max_completion_tokens=1000,
-                top_p=0.9
+                top_p=1
             )
             
             response = completion.choices[0].message.content
@@ -98,10 +98,83 @@ class ContestEvaluator:
                 "완성도": 25,
                 "기억하기 쉬움": 25
             }
-    
+
     def evaluate_submissions(self, contest_title: str, contest_content: str, 
-                        submissions: List[Dict], criteria: Optional[Dict[str, int]] = None) -> List[Dict]:
+                            submissions: List[Dict], criteria: Optional[Dict[str, int]] = None) -> List[Dict]:
         """Evaluate submissions using Gemini 2.5 flash model."""
+        try:
+            logger.info(f"🎯 작명 평가 시작: {len(submissions)}개 작명")
+            
+            # Generate criteria if not provided
+            if not criteria:
+                criteria = self.generate_criteria(contest_title, contest_content)
+            
+            # Prepare submissions for evaluation
+            submissions_text = self._format_submissions_for_evaluation(submissions)
+
+            # 👇 user_prompt에 시스템 프롬프트의 역할을 부여합니다.
+            user_prompt = f"""당신은 {contest_title}의 심사위원입니다.
+    다음은 공모전 내용입니다.
+    <contest_content>
+    {contest_content}
+    </contest_content>
+    
+    이 공모전의 출품작들을 평가해야 합니다. 다음 출품작에 대해 위의 평가 기준에 따라 채점한 뒤, 점수가 높은 20개 작품을 반환하세요.
+    각 submission에 대해 아래의 평가 기준에 따라 점수를 매겨주세요.
+    <score_criteria>
+    {json.dumps(criteria, ensure_ascii=False, indent=2)}
+    </score_criteria>
+    <submissions>
+    {submissions_text}
+    </submissions>
+
+    각 평가 항목에 대한 점수와 함께 총점을 계산하고, 각 작품에 대한 평가 코멘트를 30자 내외로 작성해주세요.
+    각 평가 항목에 대한 총점은 100점입니다.
+
+    <expected_json>
+    {{
+        "evaluations": [
+            {{
+                "submission": "작명 내용",
+                "description": "설명",
+                "score": {json.dumps({k: 0 for k in criteria.keys()})},
+                "total_score": int,
+                "comments": "평가 코멘트"
+            }},
+            // ... (for other submissions)
+        ]
+    }}
+    </expected_json>
+
+    guidelines:
+    1. 전체 submission에 대해 공평한 기준으로 채점을 진행합니다. 
+    2. 채점된 submission 중 점수가 높은 20개를 선정합니다. 동일 점수일 경우, 무작위로 선정합니다.
+    3. 점수가 높은 순서래도 위의 expected_json 형식에 맞춰 결과를 반환합니다. 
+    """
+
+            # Call Gemini API
+            response = self.gemini_client.generate_content(user_prompt)
+            result = response.text
+            
+            print(result)
+            
+            # Parse evaluation results
+            evaluated_submissions = self._parse_evaluation_response(result, submissions)
+            
+            # Sort by total score (highest first)
+            evaluated_submissions.sort(key=lambda x: x.get('total_score', 0), reverse=True)
+            
+            logger.info(f"📊 평가 완료: {len(evaluated_submissions)}개 작명 정렬됨")
+            
+            return evaluated_submissions
+            
+        except Exception as e:
+            logger.error(f"❌ 작명 평가 실패: {str(e)}")
+            # Return original submissions with default scores
+            return self._add_default_scores(submissions)
+
+    def evaluate_submissions_gpt(self, contest_title: str, contest_content: str, 
+                        submissions: List[Dict], criteria: Optional[Dict[str, int]] = None) -> List[Dict]:
         try:
             logger.info(f"🎯 작명 평가 시작: {len(submissions)}개 작명")
             
@@ -114,46 +187,53 @@ class ContestEvaluator:
             
             system_prompt = f"""당신은 {contest_title}의 심사위원입니다. 
     {contest_content}를 참고하여, 공모전의 공정한 평가를 진행하세요.
-    {json.dumps(criteria, ensure_ascii=False, indent=2)}"""
+    """
 
             # --- 👇 여기부터 들여쓰기를 수정합니다 ---
             user_prompt = f"""다음 {contest_title}에 출품한 작품들에 대해 평가를 진행하세요.
-
     <submissions>
     {submissions_text}
     </submissions>
 
     각 submission에 대해 위의 평가 기준에 따라 점수를 매겨주세요. 
     <score_criteria>
-    {criteria}
+    {json.dumps(criteria, ensure_ascii=False, indent=2)}
     <score_criteria/>
     각 평가 항목에 대한 점수와 함께 총점을 계산하고, 각 작품에 대한 평가 코멘트를 30자 내외로 작성해주세요.
     각 평가 항목에 대한 총점은 100점입니다. 
-    결과는 다음과 같은 JSON 형태로 반환해주세요:
 
+    <expected_json>
     {{
         "evaluations": [
             {{
                 "submission": "작명 내용",
                 "description": "설명",
-                "provider": "제공자",
-                "model": "모델명",
-                "temperature": 0.7,
-                "top_p": 0.95,
-                "iteration": 1,
                 "score": {json.dumps({k: 0 for k in criteria.keys()})},
-                "total_score": 0,
+                "total_score": int,
                 "comments": "평가 코멘트"
             }},
             // ... (for other submissions)
         ]
-    }}"""
+    }}
+    </expected_json>
+    """
 
-            # Call Gemini API
-            response = self.gemini_client.generate_content(user_prompt)
-            result = response.text
-            
-            logger.info(f"✅ 작명 평가 완료: {len(result)}자")
+            completion = self.groq_client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=1,
+                max_completion_tokens=8000,
+                reasoning_effort="medium",
+                top_p=1,
+                response_format= {"type": "json_object"}
+            )
+
+            result = completion.choices[0].message.content
+            print(result)
+            # logger.info(f"✅ 작명 평가 완료: {len(result)}자")
             
             # Parse evaluation results
             evaluated_submissions = self._parse_evaluation_response(result, submissions)
@@ -178,11 +258,6 @@ class ContestEvaluator:
             formatted.append(f"""    {{
       "submission": "{submission.get('submission', '')}",
       "description": "{submission.get('description', '')}",
-      "provider": "{submission.get('provider', '')}",
-      "model": "{submission.get('model', '')}",
-      "temperature": {submission.get('temperature', 0)},
-      "top_p": {submission.get('top_p', 0)},
-      "iteration": {submission.get('iteration', 0)}
     }}""")
         
         return "  " + ",\n".join(formatted)
