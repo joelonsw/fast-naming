@@ -12,7 +12,7 @@ class ContestEvaluator:
     def __init__(self):
         """Initialize the contest evaluator with LLM clients."""
         self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.gemini_client = genai.GenerativeModel('gemini-2.5-flash')
+        self.gemini_client = genai.GenerativeModel('gemini-2.5-pro')
         
     def generate_criteria(self, contest_title: str, contest_content: str) -> Dict[str, int]:
         """Generate evaluation criteria using Groq GPT-OSS-120B model."""
@@ -128,7 +128,7 @@ class ContestEvaluator:
     {submissions_text}
     </submissions>
 
-    각 평가 항목에 대한 점수와 함께 총점을 계산하고, 각 작품에 대한 평가 코멘트를 30자 내외로 작성해주세요.
+    각 평가 항목에 대한 점수와 함께 총점을 계산하고, 각 작품에 대한 평가 코멘트를 20자 내외로 작성해주세요.
     각 평가 항목에 대한 총점은 100점입니다.
 
     <expected_json>
@@ -147,9 +147,9 @@ class ContestEvaluator:
     </expected_json>
 
     guidelines:
-    1. 전체 submission에 대해 공평한 기준으로 채점을 진행합니다. 
-    2. 채점된 submission 중 점수가 높은 20개를 선정합니다. 동일 점수일 경우, 무작위로 선정합니다.
-    3. 점수가 높은 순서래도 위의 expected_json 형식에 맞춰 결과를 반환합니다. 
+    1. 전체 submission에 대해 공평한 기준으로 채점을 진행합니다. 항목별로 합리적인 기준으로 채점을 진행해야 합니다. 
+    2. 채점된 submission 중 총점이 높은 20개를 선정합니다. 동일 점수일 경우, 무작위로 선정합니다.
+    3. 점수가 높은 순서대로 위의 expected_json 형식에 맞춰 결과를 반환합니다. 
     """
 
             # Call Gemini API
