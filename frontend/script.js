@@ -260,7 +260,7 @@ async function handleEvaluationClick() {
     const evaluationStatus = document.getElementById('evaluationStatus');
     const evaluationResultDiv = document.getElementById('evaluationResult');
 
-    evaluationStatus.textContent = '🤖 AI 채점을 시작합니다... (최대 1분 소요)';
+    evaluationStatus.textContent = '🤖 AI 채점을 시작합니다...';
     evaluationStatus.style.color = '#007bff';
     evaluationResultDiv.innerHTML = '';
     evaluateButton.disabled = true;

@@ -5,9 +5,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+import asyncio
 from typing import Union, List, Dict, Optional
+import httpx
+from bs4 import BeautifulSoup
 from contest_processor import create_async_contest_processor
-from evaluator import create_contest_evaluator
+# from evaluator import create_contest_evaluator
+from evaluator_with_search import create_evaluator_with_search
 
 # 로깅 설정
 logging.basicConfig(
@@ -185,7 +189,8 @@ async def test_llm_generation(request: ContestRequest):
     try:
         from async_llm_client import create_async_llm_orchestrator
         from contest_processor import create_async_contest_processor
-        from evaluator import create_contest_evaluator
+        # from evaluator import create_contest_evaluator
+        from evaluator_with_search import create_evaluator_with_search
         
         logger.info("🧪 LLM 테스트 시작")
         
@@ -302,17 +307,30 @@ class EvaluationResponse(BaseModel):
     total_submissions: Optional[int] = None
     evaluation_criteria: Optional[Dict[str, int]] = None
 
+async def _perform_web_search(query: str) -> List[str]:
+    """Performs a web search using httpx and BeautifulSoup to get snippets."""
+    try:
+        async with httpx.AsyncClient() as client:
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+            response = await client.get(f"https://html.duckduckgo.com/html/?q={query}", headers=headers, follow_redirects=True)
+            response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        snippets = [a.text for a in soup.find_all('a', class_='result__snippet')]
+        return snippets[:3] # Return top 3 snippets
+    except Exception as e:
+        logger.error(f"❌ Web search failed for query '{query}': {e}")
+        return []
+
 @app.post("/evaluate", response_model=EvaluationResponse)
 async def evaluate_contest_submissions(request: EvaluationRequest):
-    """Evaluate contest submissions using LLM-based scoring."""
+    """Evaluate contest submissions using LLM-based scoring and web search for persona."""
     logger.info(f"🎯 POST /evaluate API 호출 시작: result_number={request.result_number}")
     
     try:
-        # Load the result file
+        # 1. Load result file
         result_file = f"result/result{request.result_number:04d}.json"
-        
         if not os.path.exists(result_file):
-            logger.error(f"❌ Result file not found: {result_file}")
             raise HTTPException(status_code=404, detail=f"Result {request.result_number} not found")
         
         logger.info(f"📂 1단계: 결과 파일 로드 시작: {result_file}")
@@ -323,63 +341,62 @@ async def evaluate_contest_submissions(request: EvaluationRequest):
         submissions = result_data.get('submissions', [])
         
         if not submissions:
-            logger.error("❌ No submissions found in result file")
             raise HTTPException(status_code=400, detail="No submissions found in result file")
-        
         logger.info(f"✅ 결과 파일 로드 완료: {len(submissions)}개 작명")
+
+        # 2. Fetch organization persona via web search
+        organization_name = contest_data.get('contestHeldBy')
+        if not organization_name:
+            raise HTTPException(status_code=400, detail="contestHeldBy is missing in result data")
+
+        logger.info(f"🕵️ 2단계: 주최 기관 페르소나 검색 시작: {organization_name}")
+        queries = [
+            f'{organization_name} 미션 비전',
+            f'{organization_name} 핵심 가치',
+            f'{organization_name} 브랜드 톤앤매너',
+        ]
         
-        # Create evaluator
-        logger.info("🔧 2단계: 평가기 생성 시작")
-        evaluator = create_contest_evaluator()
-        logger.info("✅ 평가기 생성 완료")
+        search_tasks = [_perform_web_search(q) for q in queries]
+        search_results_list = await asyncio.gather(*search_tasks)
+
+        organization_persona = f"주최 기관 '{organization_name}'에 대한 웹 검색 결과 요약:\n"
+        for i, snippets in enumerate(search_results_list):
+            if snippets:
+                organization_persona += f"\n## 검색 주제: {queries[i]}\n"
+                organization_persona += "\n".join(f"- {s}" for s in snippets)
         
-        # Check if criteria already exists
-        existing_criteria = contest_data.get('contestCriteria')
+        if len(organization_persona) < 100:
+            organization_persona = "주최 기관에 대한 구체적인 온라인 정보를 찾지 못했습니다."
+        logger.info("✅ 페르소나 정보 종합 완료")
+
+        # 3. Create evaluator and evaluate
+        logger.info("🔧 3단계: 평가기 생성 및 평가 시작")
+        evaluator = create_evaluator_with_search()
         
-        # Generate evaluation criteria if not exists
-        logger.info("📊 3단계: 평가 기준 생성 시작")
-        if existing_criteria:
-            criteria = existing_criteria
-            logger.info(f"✅ 기존 평가 기준 사용: {criteria}")
-        else:
-            criteria = evaluator.generate_criteria(
-                contest_data.get('contestTitle', ''),
-                contest_data.get('contestContent', '')
-            )
-            logger.info(f"✅ 새로운 평가 기준 생성: {criteria}")
-        
-        # Evaluate submissions
-        logger.info("🎯 4단계: 작명 평가 시작")
-        evaluated_submissions = evaluator.evaluate_submissions(
-            contest_data.get('contestTitle', ''),
-            contest_data.get('contestContent', ''),
-            submissions,
-            criteria
+        evaluated_submissions, criteria_used = await evaluator.evaluate_submissions(
+            contest_data=contest_data,
+            submissions=submissions,
+            organization_persona=organization_persona
         )
-        
-        # Save evaluation results
-        logger.info("💾 5단계: 평가 결과 저장 시작")
+        logger.info("✅ 평가 완료")
+
+        # 4. Save evaluation results
+        logger.info("💾 4단계: 평가 결과 저장 시작")
         score_file = evaluator.save_evaluation_result(
             request.result_number,
             evaluated_submissions,
-            criteria,
+            criteria_used,
             contest_data
         )
         logger.info(f"✅ 평가 결과 저장 완료: {score_file}")
         
-        # Calculate statistics
-        total_score = sum(sub.get('total_score', 0) for sub in evaluated_submissions)
-        avg_score = total_score / len(evaluated_submissions) if evaluated_submissions else 0
-        
-        logger.info(f"📈 6단계: 통계 생성 완료 - 총점: {total_score}, 평균: {avg_score:.2f}")
-        
-        # Return response
+        # 5. Return response
         response = EvaluationResponse(
             success=True,
             message="Contest submissions evaluated successfully",
             score_file=score_file,
             total_submissions=len(evaluated_submissions),
-            evaluation_criteria=criteria
+            evaluation_criteria=criteria_used
         )
         
         logger.info(f"🎉 평가 완료! {len(evaluated_submissions)}개 작명 평가됨")
@@ -390,6 +407,7 @@ async def evaluate_contest_submissions(request: EvaluationRequest):
     except Exception as e:
         logger.error(f"❌ 평가 중 오류 발생: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to evaluate submissions: {str(e)}")
+
 
 @app.get("/api/score/{score_number}")
 async def get_score_data(score_number: int):
