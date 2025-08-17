@@ -9,7 +9,8 @@ import random
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from async_llm_client import create_async_llm_orchestrator
+# from async_llm_client import create_async_llm_orchestrator
+from async_creative_llm_client import create_async_creative_llm_orchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,8 @@ class AsyncContestProcessor:
         logger.info("🔧 ContestProcessor 초기화 시작")
         self.examples_data = self._load_examples()
         logger.info(f"📚 예시 데이터 로드 완료: {len(self.examples_data)}개")
-        self.llm_orchestrator = create_async_llm_orchestrator()
+                # self.llm_orchestrator = create_async_llm_orchestrator()
+        self.llm_orchestrator = create_async_creative_llm_orchestrator()
         logger.info("🤖 LLM Orchestrator 생성 완료")
         self.result_counter = self._get_next_result_number()
         logger.info(f"📁 다음 결과 파일 번호: {self.result_counter}")
@@ -123,7 +125,7 @@ class AsyncContestProcessor:
             submissions = await self.llm_orchestrator.generate_submissions(
                 contest_data=contest_data,
                 successful_examples=successful_examples,
-                num_iterations=5
+                num_iterations=1 # Creative strategies provide variety
             )
             logger.info(f"✅ LLM 작명 생성 완료: {len(submissions)}개 생성됨")
             
