@@ -252,6 +252,30 @@ async def test_llm_generation(request: ContestRequest):
         logger.error(f"❌ LLM 테스트 실패: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
+# Refinement endpoint
+class RefinementRequest(BaseModel):
+    result_number: str
+    selected_submissions: List[Dict[str, str]]
+    refinement_instruction: str
+
+@app.post("/api/refine")
+async def refine_submissions_endpoint(request: RefinementRequest):
+    """Refines selected submissions based on user feedback."""
+    try:
+        processor = create_async_contest_processor()
+        result = await processor.refine_submissions(
+            result_number=request.result_number,
+            selected_submissions=request.selected_submissions,
+            refinement_instruction=request.refinement_instruction
+        )
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+        
+        return result
+    except Exception as e:
+        logger.error(f"❌ Refinement failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Frontend routes
 @app.get("/result/{result_number}")
 async def get_result_page(result_number: int):

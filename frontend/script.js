@@ -5,15 +5,13 @@ let allSubmissions = [];
 // Get result number from URL
 function getResultNumber() {
     const path = window.location.pathname;
-    const match = path.match(/\/result\/(\d+)/);
+    const match = path.match(/\/result\/([\w_]+)/); // Adjusted to handle refined names like 0028_refined_01
     return match ? match[1] : '1';
 }
 
 // Load result data
 async function loadResultData() {
     const resultNumber = getResultNumber();
-    const resultFile = `result${resultNumber.padStart(4, '0')}.json`;
-    
     try {
         const response = await fetch(`/api/result/${resultNumber}`);
         if (!response.ok) {
@@ -57,17 +55,16 @@ function displayContestInfo() {
 
 // Display statistics
 function displayStatistics() {
-    const stats = resultData.statistics || {};
+    const totalSubmissions = resultData.total_submissions || allSubmissions.length;
     
-    document.getElementById('totalSubmissions').textContent = stats.total_submissions || 0;
-    document.getElementById('totalModels').textContent = Object.keys(stats.model_distribution || {}).length;
-    document.getElementById('totalProviders').textContent = Object.keys(stats.provider_distribution || {}).length;
+    document.getElementById('totalSubmissions').textContent = totalSubmissions;
+    document.getElementById('totalModels').textContent = Object.keys(resultData.statistics?.model_distribution || {}).length;
+    document.getElementById('totalProviders').textContent = Object.keys(resultData.statistics?.provider_distribution || {}).length;
 }
 
 // Display provider distribution
 function displayProviderDistribution() {
-    const stats = resultData.statistics || {};
-    const providerDist = stats.provider_distribution || {};
+    const providerDist = resultData.statistics?.provider_distribution || {};
     const container = document.getElementById('providerChart');
     
     container.innerHTML = '';
@@ -85,8 +82,7 @@ function displayProviderDistribution() {
 
 // Display model distribution
 function displayModelDistribution() {
-    const stats = resultData.statistics || {};
-    const modelDist = stats.model_distribution || {};
+    const modelDist = resultData.statistics?.model_distribution || {};
     const container = document.getElementById('modelChart');
     
     container.innerHTML = '';
@@ -114,12 +110,21 @@ function displaySubmissions() {
         card.dataset.model = submission.model || '';
         card.dataset.submission = submission.submission || '';
         
+        const submissionText = submission.submission || 'N/A';
+        const submissionDesc = submission.description || 'N/A';
+
+        // **FIX**: Store index instead of stringified JSON
         card.innerHTML = `
-            <div class="submission-text">${submission.submission || 'N/A'}</div>
-            <div class="submission-description">${submission.description || 'N/A'}</div>
-            <div class="submission-meta">
-                <span class="provider-badge">${getProviderDisplayName(submission.provider || 'unknown')}</span>
-                <span class="model-badge">${getModelDisplayName(submission.model || 'unknown')}</span>
+            <div class="submission-select">
+                <input type="checkbox" class="refine-checkbox" data-index="${index}">
+            </div>
+            <div class="submission-content">
+                <div class="submission-text">${submissionText}</div>
+                <div class="submission-description">${submissionDesc}</div>
+                <div class="submission-meta">
+                    <span class="provider-badge">${getProviderDisplayName(submission.provider || 'unknown')}</span>
+                    <span class="model-badge">${getModelDisplayName(submission.model || 'unknown')}</span>
+                </div>
             </div>
         `;
         
@@ -156,7 +161,9 @@ function setupFilters() {
     const providerFilter = document.getElementById('providerFilter');
     const modelFilter = document.getElementById('modelFilter');
     
-    // Add provider options
+    providerFilter.innerHTML = '<option value="">모든 제공자</option>';
+    modelFilter.innerHTML = '<option value="">모든 모델</option>';
+
     providers.forEach(provider => {
         const option = document.createElement('option');
         option.value = provider;
@@ -164,7 +171,6 @@ function setupFilters() {
         providerFilter.appendChild(option);
     });
     
-    // Add model options
     models.forEach(model => {
         const option = document.createElement('option');
         option.value = model;
@@ -202,23 +208,20 @@ function filterSubmissions() {
 function getProviderDisplayName(provider) {
     const names = {
         'groq': 'Groq',
-        'github_ai': 'GitHub AI',
-        'gemini': 'Google Gemini'
+        'github': 'GitHub AI',
+        'gemini': 'Google Gemini',
+        'together': 'Together AI'
     };
     return names[provider] || provider;
 }
 
 function getModelDisplayName(model) {
-    // Shorten long model names for display
     const shortNames = {
         'openai/gpt-oss-120b': 'GPT-OSS-120B',
-        'deepseek-r1-distill-llama-70b': 'DeepSeek-R1-70B',
         'llama-3.3-70b-versatile': 'Llama-3.3-70B',
         'gemma2-9b-it': 'Gemma2-9B',
-        'meta-llama/llama-prompt-guard-2-86m': 'Llama-Prompt-Guard',
         'qwen/qwen3-32b': 'Qwen3-32B',
         'microsoft/Phi-4': 'Phi-4',
-        'deepseek/DeepSeek-R1-0528': 'DeepSeek-R1',
         'gemini-2.5-flash': 'Gemini-2.5-Flash'
     };
     return shortNames[model] || model;
@@ -243,6 +246,7 @@ function showError(message) {
 document.addEventListener('DOMContentLoaded', () => {
     loadResultData();
     initializeEvaluation();
+    initializeRefinement(); // Initialize the new refinement feature
 });
 
 // Initialize evaluation functionality
@@ -250,6 +254,75 @@ function initializeEvaluation() {
     const evaluateButton = document.getElementById('evaluateButton');
     if (evaluateButton) {
         evaluateButton.addEventListener('click', handleEvaluationClick);
+    }
+}
+
+// Initialize refinement functionality
+function initializeRefinement() {
+    const refineButton = document.getElementById('refineButton');
+    if (refineButton) {
+        refineButton.addEventListener('click', handleRefineClick);
+    }
+}
+
+// Handle refinement button click
+async function handleRefineClick() {
+    const resultNumber = getResultNumber();
+    const refineButton = document.getElementById('refineButton');
+    const refineStatus = document.getElementById('refineStatus');
+
+    // **FIX**: Select by class and get data-index
+    const selectedCheckboxes = document.querySelectorAll('.refine-checkbox:checked');
+    if (selectedCheckboxes.length === 0) {
+        alert('개선할 아이디어를 하나 이상 선택해주세요.');
+        return;
+    }
+
+    // **FIX**: Retrieve full submission object from allSubmissions array using the index
+    const selected_submissions = Array.from(selectedCheckboxes).map(cb => {
+        const index = parseInt(cb.dataset.index, 10);
+        return allSubmissions[index];
+    });
+
+    const refinement_instruction = document.getElementById('refinementInstruction').value || '선택한 아이디어들의 장점을 조합하고 발전시켜주세요.';
+
+    refineStatus.textContent = '✨ AI가 아이디어를 개선하고 있습니다...';
+    refineStatus.style.color = '#007bff';
+    refineButton.disabled = true;
+    refineButton.textContent = '개선 중...';
+
+    try {
+        const response = await fetch('/api/refine', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                result_number: parseInt(resultNumber), // Ensure it's a number
+                selected_submissions,
+                refinement_instruction
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        refineStatus.textContent = '✅ 개선이 완료되었습니다! 새로운 결과 페이지로 이동합니다.';
+        refineStatus.style.color = '#28a745';
+
+        const newFileIdentifier = result.new_result_file.split('/').pop().replace('result', '').replace('.json', '');
+        window.location.href = `/result/${newFileIdentifier}`;
+
+    } catch (error) {
+        console.error('Refinement failed:', error);
+        refineStatus.textContent = `❌ 개선 실패: ${error.message}`;
+        refineStatus.style.color = '#dc3545';
+    } finally {
+        refineButton.disabled = false;
+        refineButton.textContent = '✨ 선택한 아이디어로 개선하기';
     }
 }
 
@@ -363,4 +436,3 @@ function displayEvaluationResults(scoreData) {
 
     container.appendChild(table);
 }
-

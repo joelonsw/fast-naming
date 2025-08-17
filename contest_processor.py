@@ -212,6 +212,86 @@ class AsyncContestProcessor:
             }
         }
 
+    async def refine_submissions(self, result_number: int, selected_submissions: List[Dict], refinement_instruction: str) -> Dict[str, Any]:
+        """Refines existing submissions based on user feedback."""
+        logger.info(f"🎯 개선 프로세스 시작: result_number={result_number}")
+        try:
+            # 1. Load original context
+            original_result_file = f"result/result{result_number:04d}.json"
+            if not os.path.exists(original_result_file):
+                raise FileNotFoundError(f"Original result file not found: {original_result_file}")
+            
+            with open(original_result_file, "r", encoding="utf-8") as f:
+                original_result = json.load(f)
+            contest_data = original_result.get("contest_data", {})
+
+            # 2. Construct the refinement prompt
+            system_prompt = """당신은 최고의 아이디어를 더 발전시키는 크리에이티브 디렉터입니다. 사용자가 선택한 유망한 초기 아이디어와 개선 요청사항을 바탕으로, 훨씬 더 발전된 최종 후보 5가지를 생성하세요."""
+
+            selected_submissions_text = ""
+            for i, sub in enumerate(selected_submissions, 1):
+                selected_submissions_text += f"{i}. {sub.get('submission')}: {sub.get('description')}\n"
+
+            user_prompt = f"""<공모전 개요>
+{contest_data.get('contestContent')}
+</공모전 개요>
+
+<유망한 초기 아이디어>
+{selected_submissions_text}
+</유망한 초기 아이디어>
+
+<개선 요청사항>
+{refinement_instruction}
+</개선 요청사항>
+
+guidelines:
+1. '유망한 초기 아이디어'들의 핵심 장점을 파악하고, 이를 조합하거나 새로운 관점을 더하여 발전시켜야 합니다.
+2. '개선 요청사항'을 반드시 반영해야 합니다.
+3. 완전히 새로운 아이디어보다는, 기존 아이디어를 '개선'하는 것에 집중하세요.
+4. 최종 결과물은 이전과 동일한 JSON 형식으로 반환하세요. (submission, description 키를 가진 객체 3개의 배열)
+"""
+
+            # 3. Call the new orchestrator method
+            logger.info("🤖 LLM을 통한 개선안 생성 시작")
+            refined_submissions = await self.llm_orchestrator.generate_from_prompt(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt
+            )
+            logger.info(f"✅ LLM 개선안 생성 완료: {len(refined_submissions)}개 생성됨")
+
+            # 4. Save refined results to a new file
+            new_result = {
+                "contest_data": contest_data,
+                "refined_from": original_result_file,
+                "refinement_instruction": refinement_instruction,
+                "selected_submissions_for_refinement": selected_submissions,
+                "submissions": refined_submissions,
+                "generated_at": datetime.now().isoformat(),
+                "total_submissions": len(refined_submissions)
+            }
+
+            # Find a new file name for the refined result
+            refined_file_path = self._get_next_refined_filename(result_number)
+            with open(refined_file_path, "w", encoding="utf-8") as f:
+                json.dump(new_result, f, ensure_ascii=False, indent=2)
+            logger.info(f"💾 개선된 결과 파일 저장 완료: {refined_file_path}")
+
+            return {"success": True, "new_result_file": refined_file_path}
+
+        except Exception as e:
+            logger.error(f"❌ 개선 프로세스 중 오류 발생: {e}", exc_info=True)
+            return {"error": f"Failed to refine submissions: {str(e)}"}
+
+    def _get_next_refined_filename(self, original_number: int) -> str:
+        """Generates a new filename for a refined result, e.g., result0028_refined_01.json"""
+        base_path = f"result/result{original_number:04d}_refined_"
+        i = 1
+        while True:
+            refined_path = f"{base_path}{i:02d}.json"
+            if not os.path.exists(refined_path):
+                return refined_path
+            i += 1
+
 
 # Convenience function
 def create_async_contest_processor() -> AsyncContestProcessor:

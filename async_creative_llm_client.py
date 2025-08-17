@@ -380,6 +380,87 @@ class AsyncCreativeLLMOrchestrator:
         logger.info(f"🔍 검증 결과: {len(submissions)}개 중 {len(valid_submissions)}개 유효")
         return valid_submissions
 
+    async def generate_from_prompt(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        num_iterations: int = 3 # Fewer iterations for focused refinement
+    ) -> List[Dict[str, Any]]:
+        """Generates submissions from a direct system and user prompt."""
+        logger.info("🎯 Creative Async LLM generation from prompt 시작")
+        tasks = []
+        temperature_variations = [0.8, 1.0, 1.2]
+
+        # For refinement, we might not need all strategies, but we can still use the multi-model approach
+        for provider_name, provider_info in self.clients.items():
+            client = provider_info["client"]
+            models = provider_info["models"]
+            for model in models:
+                for i in range(num_iterations):
+                    temperature = temperature_variations[i % len(temperature_variations)]
+                    top_p = 0.99999
+                    task = self._generate_single_submission_from_prompt(
+                        client=client,
+                        provider_name=provider_name,
+                        model=model,
+                        iteration=i,
+                        temperature=temperature,
+                        top_p=top_p,
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt
+                    )
+                    tasks.append(task)
+
+        results = await asyncio.gather(*tasks)
+        all_submissions = [item for sublist in results for item in sublist]
+
+        logger.info(f"🎉 Creative Async LLM generation from prompt 완료! 총 작명: {len(all_submissions)}개")
+        return all_submissions
+
+    async def _generate_single_submission_from_prompt(
+        self,
+        client: AsyncLLMClient,
+        provider_name: str,
+        model: str,
+        iteration: int,
+        temperature: float,
+        top_p: float,
+        system_prompt: str,
+        user_prompt: str
+    ) -> List[Dict[str, Any]]:
+        """Helper to generate a single submission from a direct prompt."""
+        try:
+            logger.info(f"🔄 {provider_name}/{model} - 반복 {iteration+1} (temp={temperature}, top_p={top_p})")
+
+            response = await client.generate(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=model,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=8192
+            )
+
+            submissions = self._parse_response(response)
+            valid_submissions = self._validate_submissions(submissions)
+
+            for submission in valid_submissions:
+                submission.update({
+                    "provider": provider_name,
+                    "model": model,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "iteration": iteration + 1,
+                    "strategy": "refinement"  # Mark as a refinement task
+                })
+            
+            logger.info(f"✅ {provider_name}/{model} - 반복 {iteration+1} 성공: {len(valid_submissions)}개 작명 생성")
+            return valid_submissions
+
+        except Exception as e:
+            logger.error(f"❌ {provider_name}/{model} - 반복 {iteration+1} 실패: {e}")
+            return []
+
 
 def create_async_creative_llm_orchestrator() -> AsyncCreativeLLMOrchestrator:
     """Create and return an async creative LLM orchestrator instance."""
