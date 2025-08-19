@@ -255,7 +255,7 @@ async def test_llm_generation(request: ContestRequest):
 # Refinement endpoint
 class RefinementRequest(BaseModel):
     result_number: str
-    selected_submissions: List[Dict[str, str]]
+    selected_submissions: List[Dict[str, str | int | float | None]]
     refinement_instruction: str
 
 @app.post("/api/refine")
@@ -278,7 +278,7 @@ async def refine_submissions_endpoint(request: RefinementRequest):
 
 # Frontend routes
 @app.get("/result/{result_number}")
-async def get_result_page(result_number: int):
+async def get_result_page(result_number: str):
     """Serve the frontend HTML page for viewing results."""
     try:
         # Check if frontend directory exists
