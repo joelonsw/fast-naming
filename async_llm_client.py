@@ -42,6 +42,13 @@ try:
 except ImportError:
     TOGETHER_AVAILABLE = False
 
+# Anthropic imports
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
 
 class AsyncLLMClient(ABC):
     """Abstract base class for async LLM clients."""
@@ -205,6 +212,51 @@ class AsyncTogetherClient(AsyncLLMClient):
         except Exception as e:
             logger.error(f"❌ Together AI API 오류: {str(e)}")
             raise Exception(f"Together AI generation failed: {str(e)}")
+
+
+class AsyncAnthropicClient(AsyncLLMClient):
+    """Async Anthropic LLM client."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        if not ANTHROPIC_AVAILABLE:
+            raise ImportError("Anthropic dependencies not available. Install `anthropic`")
+
+        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        if not self.api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable must be set")
+
+        self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
+
+    async def generate(self, system_prompt: str, user_prompt: str, **kwargs) -> str:
+        """Generate response using Anthropic asynchronously."""
+        try:
+            model = kwargs.get("model", "claude-sonnet-4-20250514")
+            temperature = kwargs.get("temperature", 1.0)
+            max_tokens = kwargs.get("max_tokens", 1024) # Claude's max_tokens is often lower
+            top_p = kwargs.get("top_p", 1.0)
+
+            logger.info(f"🚀 Anthropic API 호출: model={model}, temp={temperature}, top_p={top_p}")
+
+            messages = []
+            if system_prompt:
+                messages.append({"role": "user", "content": system_prompt}) # Anthropic system prompt is part of user message
+            messages.append({"role": "user", "content": user_prompt})
+
+            response = await self.client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=messages,
+                temperature=temperature,
+                top_p=top_p,
+            )
+
+            content = response.content[0].text
+            logger.info(f"✅ Anthropic API 응답 수신: {len(content)}자")
+            return content
+
+        except Exception as e:
+            logger.error(f"❌ Anthropic API 오류: {str(e)}")
+            raise Exception(f"Anthropic generation failed: {str(e)}")
 
 
 class AsyncLLMOrchestrator:

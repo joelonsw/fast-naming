@@ -13,12 +13,23 @@ import re
 logger = logging.getLogger(__name__)
 
 class EvaluatorWithSearch:
-    """Evaluator that enriches context by using a pre-fetched host organization's persona."""
+    """
+    Evaluator that enriches context by using a pre-fetched host organization's persona
+    and processes submissions in batches for improved reliability.
+    """
 
     def __init__(self):
         """Initialize the contest evaluator with LLM clients."""
         self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.gemini_client = genai.GenerativeModel('gemini-2.5-pro')
+        self.gemini_client = genai.GenerativeModel(
+            'gemini-2.5-pro',
+            safety_settings={
+                'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE',
+                'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_NONE',
+                'HARM_CATEGORY_SEXUALLY_EXPLICIT': 'BLOCK_NONE',
+                'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_NONE'
+            }
+        )
 
     async def generate_criteria(self, contest_title: str, contest_content: str, organization_persona: str) -> Dict[str, int]:
         """Generate evaluation criteria using Groq, enriched with persona context."""
@@ -68,24 +79,35 @@ class EvaluatorWithSearch:
             
         except Exception as e:
             logger.error(f"❌ 평가 기준 생성 실패: {str(e)}")
-            return {"창의성": 25, "브랜드 적합성": 35, "기억용이성": 20, "활용성": 20}
+            # Provide a sensible default if generation fails
+            return {"브랜드 적합성": 35, "창의성": 25, "기억용이성": 20, "활용성": 20}
 
     async def evaluate_submissions(self, contest_data: Dict, submissions: List[Dict], organization_persona: str) -> (List[Dict], Dict[str, int]):
-        """Evaluate submissions using Gemini, enriched with a pre-fetched persona context."""
+        """
+        Evaluate submissions in batches using Gemini, enriched with a pre-fetched persona context.
+        """
         try:
             contest_title = contest_data.get('contestTitle', '')
             contest_content = contest_data.get('contestContent', '')
             criteria = contest_data.get('contestCriteria')
 
-            logger.info(f"🎯 작명 평가 시작: {len(submissions)}개 작명")
+            logger.info(f"🎯 작명 평가 시작: {len(submissions)}개 작명 (배치 처리)")
 
-            # Generate criteria if not provided, using the persona
             if not criteria:
                 criteria = await self.generate_criteria(contest_title, contest_content, organization_persona)
-            
-            submissions_text = self._format_submissions_for_evaluation(submissions)
 
-            user_prompt = f"""당신은 {contest_title}의 전문 심사위원입니다. 아래 정보를 바탕으로 출품작을 평가하세요.
+            # --- BATCH PROCESSING LOGIC ---
+            batch_size = 40  # Process 40 submissions at a time. Adjust if necessary.
+            all_evaluated_submissions = []
+            
+            for i in range(0, len(submissions), batch_size):
+                batch_submissions = submissions[i:i + batch_size]
+                logger.info(f"⚙️ 배치 처리 중: {i+1}-{min(i + batch_size, len(submissions))} / {len(submissions)}")
+                
+                submissions_text = self._format_submissions_for_evaluation(batch_submissions)
+
+                # This prompt is now tailored for evaluating a single batch
+                user_prompt = f"""당신은 {contest_title}의 전문 심사위원입니다. 아래 정보를 바탕으로 출품작을 평가하세요.
 
 <주최 기관 분석 정보>
 {organization_persona}
@@ -99,14 +121,14 @@ class EvaluatorWithSearch:
 {json.dumps(criteria, ensure_ascii=False, indent=2)}
 </평가 기준>
 
-<출품작 목록>
+<이번에 평가할 출품작 목록>
 {submissions_text}
-</출품작 목록>
+</이번에 평가할 출품작 목록>
 
 **평가 지침:**
 1. 각 출품작에 대해 <평가 기준>에 따라 점수를 엄격하게 매겨주세요.
 2. <주최 기관 분석 정보>를 반드시 참고하여, 기관의 성향과 비전에 부합하는지를 점수에 반영하세요.
-3. 총점이 높은 순서대로 상위 20개의 작품을 선정하세요.
+3. **이번에 제공된 모든 출품작**을 빠짐없이 평가해주세요.
 4. 각 작품에 대한 평가 코멘트를 20자 내외로 작성해주세요.
 
 **출력 형식:**
@@ -125,26 +147,56 @@ class EvaluatorWithSearch:
 }}
 ```
 """
+                generation_config = genai.types.GenerationConfig(
+                    max_output_tokens=16384,
+                    response_mime_type="application/json"
+                )
 
-            response = self.gemini_client.generate_content(user_prompt)
-            evaluated_submissions = self._parse_evaluation_response(response.text, submissions)
+                try:
+                    response = await self.gemini_client.generate_content_async(
+                        user_prompt,
+                        generation_config=generation_config
+                    )
+                    response_text = response.text
+                    evaluated_batch = self._parse_evaluation_response(response_text, batch_submissions)
+                    all_evaluated_submissions.extend(evaluated_batch)
+                except ValueError:
+                    logger.error(
+                        f"❌ 배치 {i//batch_size + 1} 평가 실패: Gemini 응답이 비어 있습니다. Finish reason: %s",
+                        response.candidates[0].finish_reason if response.candidates else "N/A"
+                    )
+                    all_evaluated_submissions.extend(self._add_default_scores(batch_submissions))
+                except Exception as batch_e:
+                    logger.error(f"❌ 배치 {i//batch_size + 1} 처리 중 오류 발생: {str(batch_e)}")
+                    all_evaluated_submissions.extend(self._add_default_scores(batch_submissions))
+                
+                # --- ADD THIS LINE ---
+                # Pause for 31 seconds to respect the 2 RPM free tier limit
+                if i + batch_size < len(submissions): # Don't sleep after the last batch
+                    logger.info("⏳ 31초 대기 (API 속도 제한 준수)")
+                    await asyncio.sleep(31)
+            # --- END BATCH PROCESSING LOGIC ---
+
+            # Sort all results from all batches together to get the final ranking
+            all_evaluated_submissions.sort(key=lambda x: x.get('total_score', 0), reverse=True)
+            logger.info(f"📊 평가 완료: {len(all_evaluated_submissions)}개 작명 정렬됨")
             
-            evaluated_submissions.sort(key=lambda x: x.get('total_score', 0), reverse=True)
-            logger.info(f"📊 평가 완료: {len(evaluated_submissions)}개 작명 정렬됨")
-            
-            return evaluated_submissions, criteria
+            return all_evaluated_submissions, criteria
             
         except Exception as e:
-            logger.error(f"❌ 작명 평가 실패: {str(e)}", exc_info=True)
-            return self._add_default_scores(submissions), {}
+            logger.error(f"❌ 작명 평가 전체 프로세스 실패: {str(e)}", exc_info=True)
+            return self._add_default_scores(submissions), criteria if 'criteria' in locals() else {}
 
     def _format_submissions_for_evaluation(self, submissions: List[Dict]) -> str:
+        """Formats a list of submission dicts into a JSON string for the prompt."""
         return json.dumps([{"submission": s.get('submission'), "description": s.get('description')} for s in submissions], ensure_ascii=False, indent=2)
 
     def _parse_evaluation_response(self, response: str, original_submissions: List[Dict]) -> List[Dict]:
+        """Parses the JSON response from the LLM and maps it back to the original submission data."""
         try:
             logger.info("Parsing evaluation response...")
-            match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
+            # Handle cases where the response might be wrapped in markdown
+            match = re.search(r'```json\s*(.*)\s*```', response, re.DOTALL)
             if match:
                 json_str = match.group(1)
             else:
@@ -153,16 +205,16 @@ class EvaluatorWithSearch:
             data = json.loads(json_str)
             evaluations = data.get("evaluations", [])
             
+            # Create a map for easy lookup of original submission data
             submission_map = {s['submission']: s for s in original_submissions}
             
             result = []
             for eval_data in evaluations:
                 original_sub = submission_map.get(eval_data['submission'])
                 if original_sub:
-                    # Ensure total_score is an integer
-                    total_score = eval_data.get("total_score", 0)
+                    # Safely convert total_score to an integer
                     try:
-                        total_score = int(total_score)
+                        total_score = int(eval_data.get("total_score", 0))
                     except (ValueError, TypeError):
                         total_score = 0
 
@@ -175,11 +227,12 @@ class EvaluatorWithSearch:
             
             logger.info(f"Successfully parsed {len(result)} evaluations.")
             return result
-        except Exception as e:
-            logger.error(f"❌ 평가 결과 파싱 실패: {str(e)}")
+        except (json.JSONDecodeError, AttributeError) as e:
+            logger.error(f"❌ 평가 결과 파싱 실패: {str(e)}. Response was: {response[:200]}...")
             return self._add_default_scores(original_submissions)
 
     def _add_default_scores(self, submissions: List[Dict]) -> List[Dict]:
+        """Adds default error values to submissions when an evaluation fails."""
         for sub in submissions:
             sub['score'] = {}
             sub['total_score'] = 0
@@ -188,6 +241,7 @@ class EvaluatorWithSearch:
 
     def save_evaluation_result(self, result_number: int, evaluated_submissions: List[Dict], 
                              criteria: Dict[str, int], contest_data: Dict) -> str:
+        """Saves the complete evaluation data to a JSON file."""
         try:
             os.makedirs("result", exist_ok=True)
             score_file = f"result/score{result_number:04d}.json"
@@ -207,5 +261,5 @@ class EvaluatorWithSearch:
             raise
 
 def create_evaluator_with_search() -> EvaluatorWithSearch:
-    """Create and return an instance of the search-enhanced evaluator."""
+    """Factory function to create an instance of the evaluator."""
     return EvaluatorWithSearch()

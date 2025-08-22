@@ -13,7 +13,7 @@ import asyncio
 from typing import List, Dict, Any, Optional, Callable
 
 # Import base classes and clients from the original module
-from async_llm_client import AsyncLLMClient, AsyncGroqClient, AsyncGitHubAIClient, AsyncGeminiClient, AsyncTogetherClient
+from async_llm_client import AsyncLLMClient, AsyncGroqClient, AsyncGitHubAIClient, AsyncGeminiClient, AsyncTogetherClient, AsyncAnthropicClient
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +147,15 @@ class AsyncCreativeLLMOrchestrator:
         except Exception as e:
             logger.error(f"❌ github AI 클라이언트 초기화 실패: {e}")
 
+        try:
+            self.clients["anthropic"] = {
+                "client": AsyncAnthropicClient(),
+                "models": ["claude-sonnet-4-20250514"]
+            }
+            logger.info("✅ Anthropic 클라이언트 초기화 성공")
+        except Exception as e:
+            logger.error(f"❌ Anthropic 클라이언트 초기화 실패: {e}")
+
         logger.info(f"📊 초기화된 클라이언트: {list(self.clients.keys())}")
 
 
@@ -161,7 +170,9 @@ class AsyncCreativeLLMOrchestrator:
         logger.info(f"📊 설정: {len(self.clients)}개 제공자, {len(CREATIVE_STRATEGIES)}개 전략, {num_iterations}회 반복")
 
         tasks = []
-        temperature_variations = [1, 1.1, 1.2, 1.3, 1.4]
+        ## FIX 1 ##: Corrected the default temperature list to be within the valid 0.0-1.0 range.
+        temperature_variations = [0.8, 0.9, 0.95, 1.0] 
+        claude_temperature_variations = [0.7, 0.8, 0.9, 0.95, 1.0] 
 
         # Iterate through strategies in addition to providers and models
         for strategy in CREATIVE_STRATEGIES:
@@ -170,7 +181,12 @@ class AsyncCreativeLLMOrchestrator:
                 models = provider_info["models"]
                 for model in models:
                     for i in range(num_iterations):
-                        temperature = random.choice(temperature_variations)
+                        ## FIX 2 ##: Conditionally choose the temperature list based on the provider.
+                        if provider_name == "anthropic":
+                            temperature = random.choice(claude_temperature_variations)
+                        else:
+                            temperature = random.choice(temperature_variations)
+                        
                         top_p = 0.99999
                         task = self._generate_single_submission(
                             client=client,
@@ -389,7 +405,9 @@ class AsyncCreativeLLMOrchestrator:
         """Generates submissions from a direct system and user prompt."""
         logger.info("🎯 Creative Async LLM generation from prompt 시작")
         tasks = []
-        temperature_variations = [0.8, 1.0, 1.2]
+        ## FIX 3 ##: Corrected this list to be within the valid 0.0-1.0 range.
+        temperature_variations = [0.8, 0.9, 1.0]
+        claude_temperature_variations = [0.7, 0.85, 1.0] # Added a separate valid list for Claude
 
         # For refinement, we might not need all strategies, but we can still use the multi-model approach
         for provider_name, provider_info in self.clients.items():
@@ -397,7 +415,12 @@ class AsyncCreativeLLMOrchestrator:
             models = provider_info["models"]
             for model in models:
                 for i in range(num_iterations):
-                    temperature = temperature_variations[i % len(temperature_variations)]
+                    ## FIX 4 ##: Conditionally choose temperature for the provider.
+                    if provider_name == "anthropic":
+                        temperature = claude_temperature_variations[i % len(claude_temperature_variations)]
+                    else:
+                        temperature = temperature_variations[i % len(temperature_variations)]
+
                     top_p = 0.99999
                     task = self._generate_single_submission_from_prompt(
                         client=client,

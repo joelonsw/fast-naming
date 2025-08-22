@@ -206,6 +206,27 @@ guidelines:
         print(response.choices[0].message.content)
         ```
 
+- https://www.anthropic.com/api (Anthropic API Documentation)
+    - 사용할 모델
+        - claude-sonnet-4-20250514
+    - 예시 연동 코드
+        ```python
+        import anthropic
+
+        client = anthropic.Anthropic(
+            # defaults to os.environ.get("ANTHROPIC_API_KEY")
+            api_key="my_api_key",
+        )
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[
+                {"role": "user", "content": "Hello, Claude"}
+            ]
+        )
+        print(message.content)
+        ```
+
 ## 2. POST /evaluate
 ### 1. 결과 페이지에서 해당 API 호출
 - 사용자가 특정 결과 페이지에서 평가하기 버튼을 눌렀을 때 호출됩니다. 
