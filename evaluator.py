@@ -5,6 +5,8 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import google.generativeai as genai
 from groq import Groq
+# google.generativeai.types에서 HarmCategory와 HarmBlockThreshold를 임포트합니다.
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +14,8 @@ class ContestEvaluator:
     def __init__(self):
         """Initialize the contest evaluator with LLM clients."""
         self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        # 클라이언트 초기화 시 genai.GenerativeModel의 인자가 올바른 모델명이어야 합니다.
+        # 'gemini-2.5-pro'가 아닌 'gemini-1.5-pro-latest' 또는 사용 가능한 다른 모델을 사용하세요.
         self.gemini_client = genai.GenerativeModel('gemini-2.5-pro')
         
     def generate_criteria(self, contest_title: str, contest_content: str) -> Dict[str, int]:
@@ -68,30 +72,25 @@ class ContestEvaluator:
     def _parse_criteria_response(self, response: str) -> Dict[str, int]:
         """Parse the criteria response from LLM."""
         try:
-            # Try to extract JSON from the response
             import re
             
-            # Look for JSON pattern
             json_match = re.search(r'\{[^{}]*"contestCriteria"[^{}]*\{[^{}]*\}', response)
             if json_match:
                 json_str = json_match.group()
                 data = json.loads(json_str)
                 return data.get("contestCriteria", {})
             
-            # If no JSON found, try to extract just the criteria part
             criteria_match = re.search(r'"contestCriteria":\s*\{[^{}]*\}', response)
             if criteria_match:
                 criteria_str = "{" + criteria_match.group() + "}"
                 data = json.loads(criteria_str)
                 return data.get("contestCriteria", {})
             
-            # Fallback: try to parse the entire response as JSON
             data = json.loads(response)
             return data.get("contestCriteria", {})
             
         except Exception as e:
             logger.error(f"❌ 평가 기준 파싱 실패: {str(e)}")
-            # Return default criteria
             return {
                 "창의성": 25,
                 "적합성": 25,
@@ -101,18 +100,15 @@ class ContestEvaluator:
 
     def evaluate_submissions(self, contest_title: str, contest_content: str, 
                             submissions: List[Dict], criteria: Optional[Dict[str, int]] = None) -> List[Dict]:
-        """Evaluate submissions using Gemini 2.5 flash model."""
+        """Evaluate submissions using Gemini model."""
         try:
             logger.info(f"🎯 작명 평가 시작: {len(submissions)}개 작명")
             
-            # Generate criteria if not provided
             if not criteria:
                 criteria = self.generate_criteria(contest_title, contest_content)
             
-            # Prepare submissions for evaluation
             submissions_text = self._format_submissions_for_evaluation(submissions)
 
-            # 👇 user_prompt에 시스템 프롬프트의 역할을 부여합니다.
             user_prompt = f"""당신은 {contest_title}의 심사위원입니다.
     다음은 공모전 내용입니다.
     <contest_content>
@@ -136,7 +132,6 @@ class ContestEvaluator:
         "evaluations": [
             {{
                 "submission": "작명 내용",
-                "description": "설명",
                 "score": {json.dumps({k: 0 for k in criteria.keys()})},
                 "total_score": int,
                 "comments": "평가 코멘트"
@@ -154,14 +149,20 @@ class ContestEvaluator:
 
             # Call Gemini API
             response = self.gemini_client.generate_content(user_prompt)
+            print(response)
+            
+            # --- ▼ [핵심 수정] API 응답이 비어있는지 확인하는 방어 코드 추가 ▼ ---
+            if not response.parts:
+                logger.error("❌ Gemini API가 빈 응답을 반환했습니다. Safety Filter에 의해 차단되었을 수 있습니다.")
+                # 응답 거부 사유를 로그로 남겨 디버깅에 활용
+                logger.error(f"응답 피드백(거부 사유): {response.prompt_feedback}")
+                # 평가 실패 시, 기본 점수를 부여하여 프로그램을 정상적으로 이어감
+                return self._add_default_scores(submissions)
+            # --- ▲ [핵심 수정] 여기까지 ▲ ---
+            
             result = response.text
             
-            print(result)
-            
-            # Parse evaluation results
             evaluated_submissions = self._parse_evaluation_response(result, submissions)
-            
-            # Sort by total score (highest first)
             evaluated_submissions.sort(key=lambda x: x.get('total_score', 0), reverse=True)
             
             logger.info(f"📊 평가 완료: {len(evaluated_submissions)}개 작명 정렬됨")
@@ -169,8 +170,7 @@ class ContestEvaluator:
             return evaluated_submissions
             
         except Exception as e:
-            logger.error(f"❌ 작명 평가 실패: {str(e)}")
-            # Return original submissions with default scores
+            logger.error(f"❌ 작명 평가 중 예외 발생: {str(e)}")
             return self._add_default_scores(submissions)
 
     def evaluate_submissions_gpt(self, contest_title: str, contest_content: str, 
@@ -178,18 +178,15 @@ class ContestEvaluator:
         try:
             logger.info(f"🎯 작명 평가 시작: {len(submissions)}개 작명")
             
-            # Generate criteria if not provided
             if not criteria:
                 criteria = self.generate_criteria(contest_title, contest_content)
             
-            # Prepare submissions for evaluation
             submissions_text = self._format_submissions_for_evaluation(submissions)
             
             system_prompt = f"""당신은 {contest_title}의 심사위원입니다. 
     {contest_content}를 참고하여, 공모전의 공정한 평가를 진행하세요.
     """
 
-            # --- 👇 여기부터 들여쓰기를 수정합니다 ---
             user_prompt = f"""다음 {contest_title}에 출품한 작품들에 대해 평가를 진행하세요.
     <submissions>
     {submissions_text}
@@ -226,29 +223,21 @@ class ContestEvaluator:
                 ],
                 temperature=1,
                 max_completion_tokens=8000,
-                reasoning_effort="medium",
                 top_p=1,
                 response_format= {"type": "json_object"}
             )
 
             result = completion.choices[0].message.content
-            print(result)
-            # logger.info(f"✅ 작명 평가 완료: {len(result)}자")
             
-            # Parse evaluation results
             evaluated_submissions = self._parse_evaluation_response(result, submissions)
-            
-            # Sort by total score (highest first)
             evaluated_submissions.sort(key=lambda x: x.get('total_score', 0), reverse=True)
             
             logger.info(f"📊 평가 완료: {len(evaluated_submissions)}개 작명 정렬됨")
             
             return evaluated_submissions
-            # --- 👆 여기까지 들여쓰기를 수정합니다 ---
             
         except Exception as e:
             logger.error(f"❌ 작명 평가 실패: {str(e)}")
-            # Return original submissions with default scores
             return self._add_default_scores(submissions)
 
     def _format_submissions_for_evaluation(self, submissions: List[Dict]) -> str:
@@ -267,10 +256,8 @@ class ContestEvaluator:
         try:
             import re
             
-            # Use a more robust regex to find the 'evaluations' array
             json_match = re.search(r'\{[^{}]*"evaluations"\s*:\s*\[(.+?)\]\s*\}', response, re.DOTALL)
             if not json_match:
-                # Fallback to parsing the entire response
                 data = json.loads(response)
                 evaluations = data.get("evaluations", [])
             else:
@@ -278,12 +265,11 @@ class ContestEvaluator:
                 data = json.loads(json_str)
                 evaluations = data.get("evaluations", [])
             
-            # Merge with original submissions
             result = []
             for i, evaluation in enumerate(evaluations):
+                # 원본 제출물 목록의 길이를 초과하지 않도록 확인
                 if i < len(original_submissions):
                     submission = original_submissions[i].copy()
-                    # Ensure scores and total score are correctly updated
                     submission.update({
                         "score": evaluation.get("score", {}),
                         "total_score": evaluation.get("total_score", 0),
@@ -291,7 +277,7 @@ class ContestEvaluator:
                     })
                     result.append(submission)
                 else:
-                    result.append(evaluation)
+                    result.append(evaluation) # 원본이 없는 경우, 평가 결과만 추가
             
             return result
             
@@ -303,13 +289,13 @@ class ContestEvaluator:
         """Add default scores to submissions when evaluation fails."""
         for submission in submissions:
             submission['score'] = {
-                "창의성": 20,
-                "적합성": 25,
-                "완성도": 25,
-                "기억하기 쉬움": 30
+                "창의성": 0,
+                "적합성": 0,
+                "완성도": 0,
+                "기억하기 쉬움": 0
             }
-            submission['total_score'] = 100
-            submission['comments'] = "기본 평가 점수"
+            submission['total_score'] = 0
+            submission['comments'] = "API 평가 실패 또는 안전 문제로 인한 기본값"
         
         return submissions
     
@@ -317,13 +303,10 @@ class ContestEvaluator:
                              criteria: Dict[str, int], contest_data: Dict) -> str:
         """Save evaluation results to score file."""
         try:
-            # Create result directory if it doesn't exist
             os.makedirs("result", exist_ok=True)
             
-            # Generate score file name
             score_file = f"result/score{result_number:04d}.json"
             
-            # Prepare data for saving
             evaluation_data = {
                 "contest_data": contest_data,
                 "evaluation_criteria": criteria,
@@ -332,7 +315,6 @@ class ContestEvaluator:
                 "submissions": evaluated_submissions
             }
             
-            # Save to file
             with open(score_file, 'w', encoding='utf-8') as f:
                 json.dump(evaluation_data, f, ensure_ascii=False, indent=2)
             
