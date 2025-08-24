@@ -23,6 +23,26 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+from fastapi.middleware.cors import CORSMiddleware
+
+# CORS 미들웨어 설정
+origins = [
+    "http://joelonname.kro.kr",
+    "https://joelonname.kro.kr",
+    "http://localhost",
+    "http://localhost:8000",
+    "http://127.0.0.1",
+    "http://127.0.0.1:8000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Mount static files
 if os.path.exists("frontend"):
     app.mount("/static", StaticFiles(directory="frontend"), name="static")
