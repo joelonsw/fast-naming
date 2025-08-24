@@ -17,7 +17,7 @@ RUN uv pip install --system --no-cache --requirement pyproject.toml
 COPY . .
 
 # Expose the port the app runs on
-EXPOSE 80
+EXPOSE 8000
 
 # Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0"]
