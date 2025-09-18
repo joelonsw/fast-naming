@@ -20,63 +20,62 @@ logger = logging.getLogger(__name__)
 # --- Creative Strategies Definition ---
 
 def strategy_keyword_combination(prompt: str, contest_data: Dict[str, Any]) -> str:
-    """Strategy: Combine keywords like organizer's name, values, and services."""
+    """전략: 주최사의 이름, 가치, 서비스 등 핵심 키워드를 조합합니다."""
     injection = f"""
-    **Creative Strategy: Keyword Combination**
-    - Focus on the core identity of '{contest_data['contestHeldBy']}'.
-    - Extract key terms from the contest description.
-    - Creatively combine these keywords to forge a new, meaningful name.
-    - Example: If keywords are 'fast' and 'service', think 'Fastive', 'Servifast', etc.
+    **전략: 핵심 키워드 조합**
+    - 주최사 '{contest_data['contestHeldBy']}'의 핵심 정체성과 가치에 집중하세요.
+    - 공모전 설명에서 가장 중요한 핵심 단어(키워드)들을 몇 가지 추출하세요.
+    - 추출한 키워드들을 창의적으로 결합하여, 새롭고 의미 있는 슬로건이나 이름을 만드세요.
     """
     return f"{injection}\n\n{prompt}"
 
 def strategy_metaphor_analogy(prompt: str, contest_data: Dict[str, Any]) -> str:
-    """Strategy: Use metaphors and analogies for emotional appeal."""
+    """전략: 감성적 호소를 위해 은유와 비유를 사용합니다."""
     injection = f"""
-    **Creative Strategy: Metaphor and Analogy**
-    - Think about what the contest subject is *like*. Is it a 'compass', a 'springboard', a 'canvas'?
-    - Use this metaphor to create a symbolic and evocative name.
-    - Appeal to emotion and imagination.
+    **전략: 은유와 비유**
+    - 이 공모전의 주제가 무엇과 비슷한지 생각해보세요. 세상을 밝히는 '등대' 인가요? 새로운 시작을 돕는 '도약대' 인가요? 무한한 가능성을 담은 '캔버스' 인가요?
+    - 이러한 은유적 상징을 활용하여, 듣는 이의 감성과 상상력을 자극하는 인상적인 슬로건을 만드세요.
+    - 직접적으로 설명하기보다, 상징을 통해 메시지를 전달하는 것이 중요합니다.
     """
     return f"{injection}\n\n{prompt}"
 
 def strategy_benefit_oriented(prompt: str, contest_data: Dict[str, Any]) -> str:
-    """Strategy: Focus on the end-user's benefit and value."""
+    """전략: 최종 사용자가 얻게 될 혜택과 가치에 집중합니다."""
     injection = f"""
-    **Creative Strategy: Benefit-Oriented**
-    - Concentrate on the ultimate value for the user. What problem does it solve? What joy does it bring?
-    - The name should intuitively reflect this positive outcome.
-    - Think from the customer's perspective.
+    **전략: 혜택 중심 접근**
+    - 사용자가 궁극적으로 얻게 될 가치나 혜택이 무엇인지에만 집중하세요. '이 서비스를 통해 어떤 문제를 해결할 수 있는가?', '어떤 즐거움이나 편리함을 얻는가?'를 자문해보세요.
+    - 슬로건만 들어도 이러한 긍정적인 결과가 직관적으로 떠오를 수 있도록 만드세요.
+    - 철저히 고객의 입장에서, 고객이 듣고 싶어 하는 말을 들려주는 것이 핵심입니다.
     """
     return f"{injection}\n\n{prompt}"
 
 def strategy_wordplay_wit(prompt: str, contest_data: Dict[str, Any]) -> str:
-    """Strategy: Use puns, double meanings, and witty acronyms."""
+    """전략: 기억에 남도록 언어유희, 중의적 표현, 재치 있는 문구를 사용합니다."""
     injection = f"""
-    **Creative Strategy: Wordplay and Wit**
-    - Use clever puns, double meanings, or playful language.
-    - Create a name that is memorable and brings a smile.
-    - The goal is originality and recall.
+    **전략: 언어유희와 재치**
+    - 사람들이 '아!'하고 무릎을 칠 만한 재치 있는 말장난, 여러 의미로 해석될 수 있는 중의적 표현, 기발한 줄임말 등을 활용하세요.
+    - 단순히 웃음을 주는 것을 넘어, 서비스의 특징과 연결되어 듣는 이의 기억에 오래 남도록 만드는 것이 목표입니다.
+    - 독창성과 한 번 들으면 잊히지 않는 매력이 중요합니다.
     """
     return f"{injection}\n\n{prompt}"
 
 def strategy_future_vision(prompt: str, contest_data: Dict[str, Any]) -> str:
-    """Strategy: Embody a future-oriented and innovative feeling."""
+    """전략: 미래 지향적이고 혁신적인 느낌을 전달합니다."""
     injection = f"""
-    **Creative Strategy: Future Vision**
-    - Imagine the ideal future that '{contest_data['contestHeldBy']}' wants to create.
-    - Use words that convey innovation, progress, and forward-thinking.
-    - The name should sound ambitious and visionary.
+    **전략: 미래 비전 제시**
+    - 주최사 '{contest_data['contestHeldBy']}'가 이 서비스를 통해 만들고자 하는 이상적인 미래의 모습을 상상해보세요.
+    - '혁신', '발전', '새로운 시대', '도약' 등 미래 지향적인 느낌을 주는 단어들을 사용하여 슬로건을 구성하세요.
+    - 듣는 이에게 원대하고 비전 있는 포부를 느끼게 하여, 기대감을 심어주어야 합니다.
     """
     return f"{injection}\n\n{prompt}"
 
 def strategy_simple_direct(prompt: str, contest_data: Dict[str, Any]) -> str:
-    """Strategy: Be simple, direct, and clear."""
+    """전략: 군더더기 없이 단순하고 명확하게 핵심을 전달합니다."""
     injection = f"""
-    **Creative Strategy: Simple and Direct**
-    - Remove all jargon and embellishments.
-    - Focus on the single, most essential message.
-    - The name must be easy to say, spell, and remember. Clarity is key.
+    **전략: 단순함과 직관성**
+    - 모든 전문 용어나 불필요한 수식어를 완전히 제거하고, 가장 본질적인 단 하나의 메시지에만 집중하세요.
+    - 누구나 쉽게 말하고, 쓰고, 기억할 수 있어야 합니다.
+    - 짧고 간결할수록 강력합니다. 명확성이 이 전략의 핵심입니다.
     """
     return f"{injection}\n\n{prompt}"
 

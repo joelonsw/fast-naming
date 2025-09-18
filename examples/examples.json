@@ -93,23 +93,9 @@
     {
        "contestType":"슬로건",
        "contestHeldByType":"공공기관",
-       "contestTitle":"해양경찰청 수사 슬로건 공모",
-       "contestWinner":"공정한 수사, 바로 서는 해양법질서",
-       "strength":"핵심가치(공정·법질서) 명확성, 권위감"
-    },
-    {
-       "contestType":"슬로건",
-       "contestHeldByType":"공공기관",
        "contestTitle":"코레일네트웍스 2025 대국민 안전 슬로건 공모",
        "contestWinner":"1초의 멈춤, 10초의 살핌, 100% 안전",
        "strength":"리듬·반복 구조로 기억성 UP, 행동 유도성 UP"
-    },
-    {
-       "contestType":"슬로건",
-       "contestHeldByType":"공공기관",
-       "contestTitle":"한국산업인력공단 블라인드 채용 슬로건 공모",
-       "contestWinner":"Every Chance Job(잡) Go(고)!",
-       "strength":"언어유희·운율감, 참여 유도형 톤"
     },
     {
        "contestType":"네이밍",
@@ -220,13 +206,6 @@
     {
         "contestType": "슬로건",
         "contestHeldByType": "공공기관",
-        "contestTitle": "육아정책연구소 기관 슬로건",
-        "contestWinner": "아동 행복, 육아 행복의 대한민국, 육아정책연구소가 함께 만들어가겠습니다.",
-        "strength": "아동과 육아에 대한 포용과 함께 만들어가는 미래 가치 강조"
-    },
-    {
-        "contestType": "슬로건",
-        "contestHeldByType": "공공기관",
         "contestTitle": "강원관광재단 슬로건",
         "contestWinner": "특별한 여행, 강원더풀",
         "strength": "강원의 특별함 강조, 여행과 강원도/원더풀의 합성어로 창의적 기억성 강화"
@@ -300,5 +279,68 @@
         "contestTitle": "조달청 마스코트",
         "contestWinner": "나르미, 달이",
         "strength": "'나르다'(배달, 운송)의 의미와 '달이'(달성, 전달)로 조달청의 핵심 기능을 직관적으로 표현. 2025년 새롭게 리뉴얼되어 현대적 감각 반영"
+    },
+    {
+        "contestType": "마스코트",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "HUG 캐릭터 네이밍 공모전",
+        "contestWinner": "허부기",
+        "strength": "HUG + 캐릭터 동물 거북이의 조합"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "한국산업안전보건공단 2025 대국민 건설안전 슬로건 공모",
+        "contestWinner": "의심되면 멈춤, 안심되면 시작",
+        "strength": "최우수상 수상작으로, 반복되는 비슷한 두 문장으로 결합하여 수상"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "한국산업안전보건공단 2025 대국민 건설안전 슬로건 공모",
+        "contestWinner": "추락은 한순간, 안전고리는 매순간",
+        "strength": "우수상 수상작으로, 반복되는 순간이라는 단어를 사용하여 수상"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "2025 세계신안보포럼 슬로건 공모전",
+        "contestWinner": "위협은 진화한다, 우리의 대응도 진화한다 (Threads Evolve, So Do We)",
+        "strength": "최우수상 수상작. 같은 진화이지만, 우리편 역시 계속해서 진화하는 것을 매우 잘 보여줌"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "2025 세계신안보포럼 슬로건 공모전",
+        "contestWinner": "은밀한 안보위협 긴밀한 국제협력 정밀한 공동대응",
+        "strength": "우수상 수상작. 동일한 단어수와 대구 형태로 슬로건 취지에 알맞는 단어의 효과적 전달"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "2025 세계신안보포럼 슬로건 공모전",
+        "contestWinner": "안전지대가 사라진 시대, 안보연대가 필요한 시대",
+        "strength": "우수상 수상작. 두 문장이 동일한 포맷으로 슬로건에 적합한 내용을 전달"
+    },
+    {
+        "contestType": "네이밍",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "충청북도 인구감소지역 학습 · 멘토링 지원사업 새 이름 공모전",
+        "contestWinner": "충BOOK",
+        "strength": "간결하지만, 효율적으로 주제를 잘 나타내는 이름"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "영광형 기본소득 슬로건 공모전",
+        "contestWinner": "자연이 주는 선물, 군민이 누리는 기본소득",
+        "strength": "최우수상 수상. 기본소득을 선물로, 자연과 군민의 연결 표현"
+    },
+    {
+        "contestType": "슬로건",
+        "contestHeldByType": "공공기관",
+        "contestTitle": "영광형 기본소득 슬로건 공모전",
+        "contestWinner": "햇살과 바람이 키운 소득, 군민이 누리는 영광",
+        "strength": "우수상 수상작. 자연을 햇살과 바람으로, 영광이라는 도시를 중의적으로 표현"
     }
 ]
