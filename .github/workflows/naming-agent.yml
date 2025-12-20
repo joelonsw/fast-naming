@@ -5,8 +5,9 @@ name: Daily Naming Agent
 
 on:
   schedule:
-    # 매일 UTC 13:00 = 한국시간 22:00
-    - cron: '0 13 * * *'
+    # 3일마다 한국시간 22:00 (UTC 13:00) 실행
+    # 매월 1, 4, 7, 10, 13, 16, 19, 22, 25, 28일
+    - cron: '0 13 */3 * *'
   
   # 수동 실행 가능
   workflow_dispatch:
