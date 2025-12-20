@@ -10,8 +10,10 @@ wheels/
 .venv
 
 # Data directories
-examples/
 result/
+# Keep examples.json but ignore other data in examples/
+web/examples/*.json
+!web/examples/examples.json
 
 # Environment variables
 .env

@@ -217,7 +217,7 @@ class NotionSaver:
                     "type": "paragraph",
                     "paragraph": {
                         "rich_text": [
-                            {"text": {"content": f"생성일: {datetime.now().strftime('%Y-%m-%d %H:%M')} | 🤖 Fast-Naming AI Agent", "annotations": {"color": "gray"}}}
+                            {"text": {"content": f"생성일: {datetime.now().strftime('%Y-%m-%d %H:%M')} | 🤖 Fast-Naming AI Agent"}}
                         ]
                     }
                 },
