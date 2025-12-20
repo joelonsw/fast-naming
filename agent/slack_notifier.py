@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 async def send_slack_notification(
     contest: ContestInfo,
     top3: List[Submission],
+    notion_url: str = None,
 ) -> bool:
     """TOP 3 결과를 Slack으로 전송"""
     
@@ -73,6 +74,19 @@ async def send_slack_notification(
                 },
             ]
         },
+    ]
+    
+    # Notion 링크 추가 (있는 경우)
+    if notion_url:
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*📒 Notion 상세 페이지:*\n<{notion_url}|Notion에서 보기>"
+            }
+        })
+    
+    blocks.extend([
         {"type": "divider"},
         {
             "type": "section",
@@ -81,8 +95,7 @@ async def send_slack_notification(
                 "text": "*🎯 추천 작명 TOP 3*"
             }
         },
-    ]
-    
+    ])
     # TOP 3 작명 추가
     for i, sub in enumerate(top3[:3]):
         medal = medals[i] if i < len(medals) else "🏅"

@@ -276,8 +276,12 @@ async def save_to_notion(
     contest: ContestInfo,
     top3: List[Submission],
     week_info: str,
-) -> bool:
-    """Notion에 결과 저장"""
+) -> Optional[str]:
+    """Notion에 결과 저장
+    
+    Returns:
+        성공 시 Notion 페이지 URL, 실패 시 None
+    """
     
     try:
         saver = NotionSaver()
@@ -286,14 +290,20 @@ async def save_to_notion(
         week_page_id = await saver.find_or_create_week_page(week_info)
         
         # 2. 공모전 페이지 생성
-        await saver.create_contest_page(week_page_id, contest, top3)
+        page_id = await saver.create_contest_page(week_page_id, contest, top3)
         
-        logger.info("✅ Notion 저장 완료")
-        return True
+        # Notion 페이지 URL 생성
+        # page_id 형식: 2cf86726-d532-81f6-949b-c5d7fe570645
+        # URL 형식: https://notion.so/2cf86726d53281f6949bc5d7fe570645
+        clean_id = page_id.replace("-", "")
+        notion_url = f"https://notion.so/{clean_id}"
+        
+        logger.info(f"✅ Notion 저장 완료: {notion_url}")
+        return notion_url
         
     except Exception as e:
         logger.error(f"❌ Notion 저장 실패: {e}")
-        return False
+        return None
 
 
 async def get_processed_urls() -> List[str]:

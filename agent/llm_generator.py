@@ -79,7 +79,56 @@ CREATIVE_STRATEGIES = [
 - 짧고 간결하며 누구나 쉽게 기억할 수 있어야 합니다.
 """
     },
+    {
+        "name": "Korean Wordplay",
+        "description": "한국어 언어유희",
+        "prompt_injection": """
+**전략: 한국어 언어유희**
+- 두운(頭韻): 같은 자음으로 시작하는 단어들 조합 (예: "빛나는 비전", "꿈꾸는 군산")
+- 각운(脚韻): 같은 모음으로 끝나는 단어들 조합
+- 의성어/의태어: 생동감 있는 표현 (예: "붕붕", "반짝반짝")
+- 줄임말/합성어: 새로운 조어 (예: "마플" = 마린플레이)
+- 한글의 아름다움을 살린 표현을 사용하세요.
+"""
+    },
+    {
+        "name": "Korean Cultural Reference",
+        "description": "한국 문화 레퍼런스",
+        "prompt_injection": """
+**전략: 한국 문화 레퍼런스**
+- 사자성어나 고사성어를 현대적으로 재해석
+- 한국 전통 문화 요소 (한, 정, 흥, 멋) 활용
+- 지역 특색 반영 (해당 지역의 역사, 특산물, 명소)
+- MZ세대가 공감할 수 있는 트렌드 표현 활용
+"""
+    },
 ]
+
+
+# 공모전 유형별 특화 프롬프트
+CONTEST_TYPE_PROMPTS = {
+    "공공기관": """
+**주최 유형: 공공기관**
+- 공익성과 신뢰감을 주는 표현 사용
+- 시민/국민이 공감할 수 있는 메시지
+- 지속가능성, 상생, 협력 등 공공 가치 반영
+- 너무 상업적이거나 가벼운 표현 지양
+""",
+    "사기업": """
+**주최 유형: 사기업**
+- 트렌디하고 세련된 표현 사용
+- 마케팅 효과가 있는 기억하기 쉬운 이름
+- 브랜드 아이덴티티와 연결 가능한 표현
+- 젊고 역동적인 이미지 연출
+""",
+    "학교": """
+**주최 유형: 학교**
+- 젊음과 창의성을 표현
+- 학생들이 공감할 수 있는 친근한 표현
+- 미래지향적이고 희망적인 메시지
+- 교육적 가치나 성장의 의미 담기
+""",
+}
 
 
 # ============================================================
@@ -221,6 +270,11 @@ def create_user_prompt(
     
     prompt = f"{contest['title']}에 참여하여 수상 확률이 가장 높은 3가지 {contest['contest_type']}을 만드세요.\n\n"
     
+    # 공모전 유형별 특화 프롬프트 추가
+    held_by_type = contest.get('held_by_type', '')
+    if held_by_type in CONTEST_TYPE_PROMPTS:
+        prompt += CONTEST_TYPE_PROMPTS[held_by_type] + "\n"
+    
     # 전략 주입
     prompt += strategy["prompt_injection"] + "\n\n"
     
@@ -237,6 +291,7 @@ def create_user_prompt(
 1. 공모전 요구사항을 모두 준수해야 합니다.
 2. 주최기관에서 좋아할 작명이어야 합니다.
 3. 독창적이고 기억에 남는 작명을 만드세요.
+4. 한국어의 아름다움과 리듬감을 살리세요.
 
 반드시 다음 JSON 형식으로만 응답하세요:
 ```json
@@ -347,10 +402,12 @@ async def generate_submissions(
                 
                 logger.info(f"✅ {len(parsed)}개 작명 생성됨")
                 
-                # Gemini rate limit 대응: 분당 30회 제한 → 호출 후 3초 대기
+                # Rate limit 대응
                 if client.provider_name == "gemini":
-                    logger.info("⏳ Gemini rate limit 대응: 3초 대기...")
-                    await asyncio.sleep(3)
+                    logger.info("⏳ Gemini rate limit 대응: 6초 대기...")
+                    await asyncio.sleep(6)
+                elif client.provider_name == "groq":
+                    await asyncio.sleep(2)  # Groq도 rate limit 대응
                 
             except Exception as e:
                 logger.error(f"❌ {client.provider_name} 생성 실패: {e}")

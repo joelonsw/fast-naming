@@ -156,9 +156,42 @@ class NamingAgent:
         logger.info("   🎯 작명 평가 중...")
         evaluated = await evaluate_submissions(contest, submissions, criteria)
         
-        # 3.5 순위 정렬 및 TOP 3 선정
-        ranked = rank_submissions(evaluated)
-        top3 = get_top_n(ranked, 3)
+        # === 품질 향상 프로세스 ===
+        from refiner import (
+            remove_duplicates, 
+            ensure_strategy_diversity, 
+            refine_top_submissions
+        )
+        
+        # 3.5 중복 제거
+        logger.info("   🧹 중복 제거...")
+        unique_submissions = remove_duplicates(evaluated, similarity_threshold=0.6)
+        logger.info(f"   → {len(evaluated)} → {len(unique_submissions)}개 (중복 제거됨)")
+        
+        # 3.6 순위 정렬
+        ranked = rank_submissions(unique_submissions)
+        
+        # 3.7 다양성 보장하여 TOP 10 선정
+        logger.info("   🎯 전략 다양성 보장...")
+        top10 = ensure_strategy_diversity(ranked, top_n=10)
+        
+        # 3.8 TOP 10 정제 (개선된 버전 생성)
+        logger.info("   ✨ TOP 10 정제 중...")
+        refined = await refine_top_submissions(contest, top10, None)
+        
+        # 정제된 작명도 평가
+        if refined:
+            logger.info("   🎯 정제된 작명 평가 중...")
+            refined_evaluated = await evaluate_submissions(contest, refined, criteria)
+            top10.extend(refined_evaluated)
+            
+            # 다시 정렬
+            ranked_final = rank_submissions(top10)
+        else:
+            ranked_final = top10
+        
+        # 3.9 최종 TOP 3 선정
+        top3 = get_top_n(ranked_final, 3)
         result["top3"] = [
             {"name": s["name"], "score": s.get("score", 0)}
             for s in top3
@@ -169,18 +202,19 @@ class NamingAgent:
             score = sub.get("score", 0) or 0
             logger.info(f"      {i}. {sub['name']} (점수: {score:.1f})")
         
-        # 3.6 Slack 알림
-        logger.info("   📤 Slack 알림 전송...")
-        slack_sent = await send_slack_notification(contest, top3)
-        result["slack_sent"] = slack_sent
-        
-        # 3.7 Notion 저장
+        # 3.10 Notion 저장 (Slack보다 먼저 - 링크 얻기 위해)
+        notion_url = None
         if os.getenv("NOTION_API_KEY") and os.getenv("NOTION_PARENT_PAGE_ID"):
             logger.info("   📝 Notion 저장...")
-            notion_saved = await save_to_notion(contest, top3, state["week_info"])
-            result["notion_saved"] = notion_saved
+            notion_url = await save_to_notion(contest, top3, state["week_info"])
+            result["notion_saved"] = notion_url is not None
         else:
             logger.info("   ⚠️ Notion 설정 없음, 저장 건너뜀")
+        
+        # 3.11 Slack 알림 (Notion 링크 포함)
+        logger.info("   📤 Slack 알림 전송...")
+        slack_sent = await send_slack_notification(contest, top3, notion_url)
+        result["slack_sent"] = slack_sent
         
         return result
 
