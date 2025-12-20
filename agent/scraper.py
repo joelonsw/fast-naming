@@ -23,10 +23,18 @@ async def get_page_content(url: str, browser: Browser) -> str:
     """Playwright를 사용하여 페이지 콘텐츠 가져오기"""
     page = await browser.new_page()
     try:
-        # networkidle로 변경하여 모든 네트워크 요청 완료 대기
-        await page.goto(url, wait_until="networkidle", timeout=60000)
-        # 추가 대기 시간
-        await page.wait_for_timeout(3000)
+        # load 이벤트까지만 대기 (networkidle은 타임아웃 위험)
+        await page.goto(url, wait_until="load", timeout=60000)
+        
+        # JavaScript 렌더링 대기 (DOM이 완전히 그려질 때까지)
+        await page.wait_for_timeout(5000)
+        
+        # ul.list가 나타날 때까지 추가 대기 (최대 10초)
+        try:
+            await page.wait_for_selector('ul.list', timeout=10000)
+        except:
+            logger.warning("⚠️ ul.list 셀렉터를 찾지 못함, 계속 진행")
+        
         content = await page.content()
         return content
     finally:
