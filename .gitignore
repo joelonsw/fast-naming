@@ -13,4 +13,8 @@ wheels/
 examples/
 result/
 
+# Environment variables
+.env
+.env.*
+
 # JSON files (but allow specific ones)
