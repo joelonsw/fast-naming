@@ -110,7 +110,7 @@ class LLMClient(ABC):
 class GeminiClient(LLMClient):
     """Google Gemini 클라이언트"""
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash-lite"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash-lite"):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self._model_name = model
         self.client = ChatGoogleGenerativeAI(
@@ -311,6 +311,7 @@ async def generate_submissions(
     strategies: List[Dict[str, Any]] = None,
 ) -> List[Submission]:
     """다중 LLM과 다중 전략으로 작명 생성"""
+    import asyncio
     
     strategies = strategies or CREATIVE_STRATEGIES
     clients = create_llm_clients()
@@ -345,6 +346,11 @@ async def generate_submissions(
                     all_submissions.append(submission)
                 
                 logger.info(f"✅ {len(parsed)}개 작명 생성됨")
+                
+                # Gemini rate limit 대응: 분당 30회 제한 → 호출 후 3초 대기
+                if client.provider_name == "gemini":
+                    logger.info("⏳ Gemini rate limit 대응: 3초 대기...")
+                    await asyncio.sleep(3)
                 
             except Exception as e:
                 logger.error(f"❌ {client.provider_name} 생성 실패: {e}")

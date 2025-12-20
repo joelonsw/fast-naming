@@ -1,13 +1,15 @@
 """
 작명 평가 모듈
+Groq openai/gpt-oss-120b 사용으로 Gemini rate limit 회피
 """
 
 import os
 import json
+import asyncio
 import logging
 from typing import List, Dict, Optional
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import ContestInfo, Submission
@@ -18,13 +20,13 @@ logger = logging.getLogger(__name__)
 async def generate_evaluation_criteria(
     contest: ContestInfo,
 ) -> Dict[str, int]:
-    """공모전 평가 기준 자동 생성"""
+    """공모전 평가 기준 자동 생성 (Groq 사용)"""
     
     logger.info(f"📊 평가 기준 생성: {contest['title']}")
     
-    gemini = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-lite",
-        google_api_key=os.getenv("GEMINI_API_KEY"),
+    groq = ChatGroq(
+        model="openai/gpt-oss-120b",
+        api_key=os.getenv("GROQ_API_KEY"),
         temperature=0.5,
     )
     
@@ -60,7 +62,7 @@ async def generate_evaluation_criteria(
     
     try:
         messages = [HumanMessage(content=prompt)]
-        response = await gemini.ainvoke(messages)
+        response = await groq.ainvoke(messages)
         
         # JSON 파싱
         import re
@@ -76,6 +78,10 @@ async def generate_evaluation_criteria(
             logger.warning(f"평가 기준 총합 {total}점 (100점이 아님)")
         
         logger.info(f"✅ 평가 기준 생성 완료: {criteria}")
+        
+        # Groq rate limit 대응: 2초 대기
+        await asyncio.sleep(2)
+        
         return criteria
         
     except Exception as e:
@@ -94,16 +100,16 @@ async def evaluate_submissions(
     submissions: List[Submission],
     criteria: Dict[str, int],
 ) -> List[Submission]:
-    """작명들을 평가하고 점수 부여"""
+    """작명들을 평가하고 점수 부여 (Groq 사용)"""
     
     logger.info(f"🎯 {len(submissions)}개 작명 평가 시작")
     
     if not submissions:
         return []
     
-    gemini = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-lite",
-        google_api_key=os.getenv("GEMINI_API_KEY"),
+    groq = ChatGroq(
+        model="openai/gpt-oss-120b",
+        api_key=os.getenv("GROQ_API_KEY"),
         temperature=0.3,  # 평가는 낮은 temperature
     )
     
@@ -146,7 +152,7 @@ async def evaluate_submissions(
     
     try:
         messages = [HumanMessage(content=prompt)]
-        response = await gemini.ainvoke(messages)
+        response = await groq.ainvoke(messages)
         
         # JSON 파싱
         import re
@@ -166,6 +172,10 @@ async def evaluate_submissions(
                 sub['criteria_scores'] = eval_data.get('scores', {})
         
         logger.info(f"✅ {len(evaluations)}개 작명 평가 완료")
+        
+        # Groq rate limit 대응: 2초 대기
+        await asyncio.sleep(2)
+        
         return submissions
         
     except Exception as e:
