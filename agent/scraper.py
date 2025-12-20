@@ -21,9 +21,16 @@ WEVITY_BASE_URL = "https://www.wevity.com/"
 
 async def get_page_content(url: str, browser: Browser) -> str:
     """Playwright를 사용하여 페이지 콘텐츠 가져오기"""
-    page = await browser.new_page()
+    # 실제 브라우저처럼 보이도록 User-Agent 설정
+    context = await browser.new_context(
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        viewport={"width": 1920, "height": 1080},
+        locale="ko-KR",
+    )
+    page = await context.new_page()
+    
     try:
-        # load 이벤트까지만 대기 (networkidle은 타임아웃 위험)
+        # load 이벤트까지만 대기
         await page.goto(url, wait_until="load", timeout=60000)
         
         # JavaScript 렌더링 대기 (DOM이 완전히 그려질 때까지)
@@ -32,13 +39,21 @@ async def get_page_content(url: str, browser: Browser) -> str:
         # ul.list가 나타날 때까지 추가 대기 (최대 10초)
         try:
             await page.wait_for_selector('ul.list', timeout=10000)
+            logger.info("✅ ul.list 셀렉터 발견")
         except:
-            logger.warning("⚠️ ul.list 셀렉터를 찾지 못함, 계속 진행")
+            logger.warning("⚠️ ul.list 셀렉터를 찾지 못함")
+            # 페이지 제목 및 일부 내용 디버깅
+            title = await page.title()
+            logger.info(f"📌 페이지 제목: {title}")
+            
+            # body 텍스트 일부 로깅
+            body_text = await page.evaluate("document.body.innerText.substring(0, 500)")
+            logger.info(f"📄 페이지 내용 미리보기: {body_text[:200]}...")
         
         content = await page.content()
         return content
     finally:
-        await page.close()
+        await context.close()
 
 
 async def scrape_contest_list() -> List[str]:
