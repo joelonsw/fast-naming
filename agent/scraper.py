@@ -7,6 +7,8 @@ from bs4 import BeautifulSoup
 from typing import List, Optional
 import re
 import logging
+import random
+import asyncio
 
 from state import ContestInfo
 
@@ -16,15 +18,32 @@ logger = logging.getLogger(__name__)
 WEVITY_LIST_URL = "https://www.wevity.com/?c=find&s=1&gub=1&cidx=25&mode=ing"
 WEVITY_BASE_URL = "https://www.wevity.com/"
 
+# 브라우저를 완벽히 모방하는 HTTP 헤더
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
+    "Referer": "https://www.google.com/",
+}
+
 
 async def scrape_contest_list() -> List[str]:
     """접수중인 공모전 목록의 상세 페이지 URL들을 수집"""
     logger.info("🔍 Wevity 접수중 공모전 목록 스크래핑 시작")
     
+    # 요청 전 약간의 지연 추가 (봇 감지 회피)
+    await asyncio.sleep(random.uniform(1, 2))
+    
     async with httpx.AsyncClient(
-        headers={
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-        },
+        headers=BROWSER_HEADERS,
         follow_redirects=True,
         timeout=30.0
     ) as client:
@@ -66,10 +85,11 @@ async def scrape_contest_detail(url: str) -> Optional[ContestInfo]:
     logger.info(f"📄 공모전 상세 스크래핑: {url}")
     
     try:
+        # 요청 전 약간의 지연 추가 (봇 감지 회피)
+        await asyncio.sleep(random.uniform(0.5, 1.5))
+        
         async with httpx.AsyncClient(
-            headers={
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-            },
+            headers=BROWSER_HEADERS,
             follow_redirects=True,
             timeout=30.0
         ) as client:
