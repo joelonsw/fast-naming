@@ -1,13 +1,13 @@
 """
-Wevity 공모전 스크래핑 모듈
+Wevity 공모전 스크래핑 모듈 (Playwright 버전)
+실제 브라우저를 사용하여 봇 감지 우회
 """
 
-import httpx
+from playwright.async_api import async_playwright, Browser, Page
 from bs4 import BeautifulSoup
 from typing import List, Optional
 import re
 import logging
-import random
 import asyncio
 
 from state import ContestInfo
@@ -18,143 +18,138 @@ logger = logging.getLogger(__name__)
 WEVITY_LIST_URL = "https://www.wevity.com/?c=find&s=1&gub=1&cidx=25&mode=ing"
 WEVITY_BASE_URL = "https://www.wevity.com/"
 
-# 브라우저를 완벽히 모방하는 HTTP 헤더
-BROWSER_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Cache-Control": "max-age=0",
-    "Referer": "https://www.google.com/",
-}
+
+async def get_page_content(url: str, browser: Browser) -> str:
+    """Playwright를 사용하여 페이지 콘텐츠 가져오기"""
+    page = await browser.new_page()
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        # 페이지 로딩 대기
+        await page.wait_for_timeout(2000)
+        content = await page.content()
+        return content
+    finally:
+        await page.close()
 
 
 async def scrape_contest_list() -> List[str]:
     """접수중인 공모전 목록의 상세 페이지 URL들을 수집"""
-    logger.info("🔍 Wevity 접수중 공모전 목록 스크래핑 시작")
+    logger.info("🔍 Wevity 접수중 공모전 목록 스크래핑 시작 (Playwright)")
     
-    # 요청 전 약간의 지연 추가 (봇 감지 회피)
-    await asyncio.sleep(random.uniform(1, 2))
-    
-    async with httpx.AsyncClient(
-        headers=BROWSER_HEADERS,
-        follow_redirects=True,
-        timeout=30.0
-    ) as client:
-        response = await client.get(WEVITY_LIST_URL)
-        response.raise_for_status()
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
         
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # 공모전 목록에서 상세 페이지 링크 추출
-        contest_urls = []
-        
-        # ul.list 내의 a[href*="gbn=view"] 링크 찾기
-        list_container = soup.select_one('ul.list')
-        if list_container:
-            links = list_container.select('a[href*="gbn=view"]')
-            for link in links:
-                href = link.get('href', '')
-                if href:
-                    # 상대 URL을 절대 URL로 변환
-                    if href.startswith('?'):
-                        full_url = WEVITY_BASE_URL + href
-                    elif not href.startswith('http'):
-                        full_url = WEVITY_BASE_URL + href
-                    else:
-                        full_url = href
-                    
-                    # viewok 파라미터가 포함된 URL로 변환
-                    full_url = full_url.replace('gbn=view', 'gbn=viewok')
-                    
-                    if full_url not in contest_urls:
-                        contest_urls.append(full_url)
-        
-        logger.info(f"✅ {len(contest_urls)}개 공모전 발견")
-        return contest_urls
+        try:
+            html = await get_page_content(WEVITY_LIST_URL, browser)
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            # 공모전 목록에서 상세 페이지 링크 추출
+            contest_urls = []
+            
+            # ul.list 내의 a[href*="gbn=view"] 링크 찾기
+            list_container = soup.select_one('ul.list')
+            if list_container:
+                links = list_container.select('a[href*="gbn=view"]')
+                for link in links:
+                    href = link.get('href', '')
+                    if href:
+                        # 상대 URL을 절대 URL로 변환
+                        if href.startswith('?'):
+                            full_url = WEVITY_BASE_URL + href
+                        elif not href.startswith('http'):
+                            full_url = WEVITY_BASE_URL + href
+                        else:
+                            full_url = href
+                        
+                        # viewok 파라미터가 포함된 URL로 변환
+                        full_url = full_url.replace('gbn=view', 'gbn=viewok')
+                        
+                        if full_url not in contest_urls:
+                            contest_urls.append(full_url)
+            
+            logger.info(f"✅ {len(contest_urls)}개 공모전 발견")
+            return contest_urls
+            
+        finally:
+            await browser.close()
 
 
-async def scrape_contest_detail(url: str) -> Optional[ContestInfo]:
+async def scrape_contest_detail(url: str, browser: Browser = None) -> Optional[ContestInfo]:
     """개별 공모전 상세 페이지 스크래핑"""
     logger.info(f"📄 공모전 상세 스크래핑: {url}")
     
+    should_close_browser = False
+    
     try:
-        # 요청 전 약간의 지연 추가 (봇 감지 회피)
-        await asyncio.sleep(random.uniform(0.5, 1.5))
+        if browser is None:
+            p = await async_playwright().start()
+            browser = await p.chromium.launch(headless=True)
+            should_close_browser = True
         
-        async with httpx.AsyncClient(
-            headers=BROWSER_HEADERS,
-            follow_redirects=True,
-            timeout=30.0
-        ) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # 제목 추출
-            title_elem = soup.select_one('div.tit-area h6.tit')
-            title = title_elem.get_text(strip=True) if title_elem else "제목 없음"
-            
-            # D-Day 정보
-            d_day_elem = soup.select_one('.d-day')
-            d_day = d_day_elem.get_text(strip=True) if d_day_elem else None
-            
-            # 공모전 정보 (분야, 주최/주관, 접수기간 등)
-            info_dict = {}
-            info_list = soup.select('ul.cd-info-list li')
-            for li in info_list:
-                label_elem = li.select_one('span.tit')
-                if label_elem:
-                    label = label_elem.get_text(strip=True)
-                    # 레이블을 제거한 나머지 텍스트가 값
-                    value = li.get_text(strip=True).replace(label, '').strip()
-                    info_dict[label] = value
-            
-            # 상세 내용
-            content_elem = soup.select_one('div.comm-desc')
-            content = content_elem.get_text(separator='\n', strip=True) if content_elem else ""
-            
-            # 주최/주관 추출
-            held_by = info_dict.get('주최/주관', info_dict.get('주최', '알 수 없음'))
-            
-            # 분야에서 contest_type 추출
-            field = info_dict.get('분야', '')
-            contest_type = detect_contest_type(field, title, content)
-            
-            # 기관 유형 추측
-            held_by_type = detect_held_by_type(held_by, content)
-            
-            # 제출방법 추출
-            submission_method = extract_submission_method(content)
-            
-            # 마감일 추출
-            deadline = info_dict.get('접수기간', '')
-            
-            contest_info = ContestInfo(
-                title=title,
-                content=content[:3000],  # 너무 긴 내용은 잘라냄
-                held_by=held_by,
-                contest_type=contest_type,
-                held_by_type=held_by_type,
-                url=url,
-                submission_method=submission_method,
-                deadline=deadline,
-                d_day=d_day,
-            )
-            
-            logger.info(f"✅ 스크래핑 완료: {title}")
-            return contest_info
-            
+        html = await get_page_content(url, browser)
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # 제목 추출
+        title_elem = soup.select_one('div.tit-area h6.tit')
+        title = title_elem.get_text(strip=True) if title_elem else "제목 없음"
+        
+        # D-Day 정보
+        d_day_elem = soup.select_one('.d-day')
+        d_day = d_day_elem.get_text(strip=True) if d_day_elem else None
+        
+        # 공모전 정보 (분야, 주최/주관, 접수기간 등)
+        info_dict = {}
+        info_list = soup.select('ul.cd-info-list li')
+        for li in info_list:
+            label_elem = li.select_one('span.tit')
+            if label_elem:
+                label = label_elem.get_text(strip=True)
+                # 레이블을 제거한 나머지 텍스트가 값
+                value = li.get_text(strip=True).replace(label, '').strip()
+                info_dict[label] = value
+        
+        # 상세 내용
+        content_elem = soup.select_one('div.comm-desc')
+        content = content_elem.get_text(separator='\n', strip=True) if content_elem else ""
+        
+        # 주최/주관 추출
+        held_by = info_dict.get('주최/주관', info_dict.get('주최', '알 수 없음'))
+        
+        # 분야에서 contest_type 추출
+        field = info_dict.get('분야', '')
+        contest_type = detect_contest_type(field, title, content)
+        
+        # 기관 유형 추측
+        held_by_type = detect_held_by_type(held_by, content)
+        
+        # 제출방법 추출
+        submission_method = extract_submission_method(content)
+        
+        # 마감일 추출
+        deadline = info_dict.get('접수기간', '')
+        
+        contest_info = ContestInfo(
+            title=title,
+            content=content[:3000],  # 너무 긴 내용은 잘라냄
+            held_by=held_by,
+            contest_type=contest_type,
+            held_by_type=held_by_type,
+            url=url,
+            submission_method=submission_method,
+            deadline=deadline,
+            d_day=d_day,
+        )
+        
+        logger.info(f"✅ 스크래핑 완료: {title}")
+        return contest_info
+        
     except Exception as e:
         logger.error(f"❌ 스크래핑 실패 ({url}): {e}")
         return None
+    
+    finally:
+        if should_close_browser and browser:
+            await browser.close()
 
 
 def detect_contest_type(field: str, title: str, content: str) -> str:
@@ -220,19 +215,54 @@ async def scrape_all_contests(exclude_urls: List[str] = None) -> List[ContestInf
     """모든 접수중 공모전 스크래핑 (중복 제외)"""
     exclude_urls = exclude_urls or []
     
-    contest_urls = await scrape_contest_list()
-    
-    # 이미 처리한 URL 제외
-    new_urls = [url for url in contest_urls if url not in exclude_urls]
-    logger.info(f"📊 새로운 공모전: {len(new_urls)}개 (총 {len(contest_urls)}개 중)")
-    
-    contests = []
-    for url in new_urls:
-        contest = await scrape_contest_detail(url)
-        if contest:
-            contests.append(contest)
-    
-    return contests
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        
+        try:
+            # 목록 페이지에서 URL 수집
+            logger.info("🔍 Wevity 접수중 공모전 목록 스크래핑 시작 (Playwright)")
+            
+            html = await get_page_content(WEVITY_LIST_URL, browser)
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            contest_urls = []
+            list_container = soup.select_one('ul.list')
+            if list_container:
+                links = list_container.select('a[href*="gbn=view"]')
+                for link in links:
+                    href = link.get('href', '')
+                    if href:
+                        if href.startswith('?'):
+                            full_url = WEVITY_BASE_URL + href
+                        elif not href.startswith('http'):
+                            full_url = WEVITY_BASE_URL + href
+                        else:
+                            full_url = href
+                        
+                        full_url = full_url.replace('gbn=view', 'gbn=viewok')
+                        
+                        if full_url not in contest_urls:
+                            contest_urls.append(full_url)
+            
+            logger.info(f"✅ {len(contest_urls)}개 공모전 발견")
+            
+            # 이미 처리한 URL 제외
+            new_urls = [url for url in contest_urls if url not in exclude_urls]
+            logger.info(f"📊 새로운 공모전: {len(new_urls)}개 (총 {len(contest_urls)}개 중)")
+            
+            # 각 공모전 상세 스크래핑
+            contests = []
+            for url in new_urls:
+                contest = await scrape_contest_detail(url, browser)
+                if contest:
+                    contests.append(contest)
+                # 각 요청 사이에 약간의 지연
+                await asyncio.sleep(1)
+            
+            return contests
+            
+        finally:
+            await browser.close()
 
 
 # 테스트용
