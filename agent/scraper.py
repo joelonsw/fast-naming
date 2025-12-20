@@ -23,9 +23,10 @@ async def get_page_content(url: str, browser: Browser) -> str:
     """Playwright를 사용하여 페이지 콘텐츠 가져오기"""
     page = await browser.new_page()
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        # 페이지 로딩 대기
-        await page.wait_for_timeout(2000)
+        # networkidle로 변경하여 모든 네트워크 요청 완료 대기
+        await page.goto(url, wait_until="networkidle", timeout=60000)
+        # 추가 대기 시간
+        await page.wait_for_timeout(3000)
         content = await page.content()
         return content
     finally:
@@ -37,10 +38,22 @@ async def scrape_contest_list() -> List[str]:
     logger.info("🔍 Wevity 접수중 공모전 목록 스크래핑 시작 (Playwright)")
     
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        # GitHub Actions 환경에서의 호환성을 위한 브라우저 옵션
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--disable-gpu',
+            ]
+        )
         
         try:
             html = await get_page_content(WEVITY_LIST_URL, browser)
+            logger.info(f"📝 페이지 HTML 길이: {len(html)}자")
+            
             soup = BeautifulSoup(html, 'html.parser')
             
             # 공모전 목록에서 상세 페이지 링크 추출
@@ -83,7 +96,16 @@ async def scrape_contest_detail(url: str, browser: Browser = None) -> Optional[C
     try:
         if browser is None:
             p = await async_playwright().start()
-            browser = await p.chromium.launch(headless=True)
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--disable-gpu',
+                ]
+            )
             should_close_browser = True
         
         html = await get_page_content(url, browser)
@@ -216,13 +238,25 @@ async def scrape_all_contests(exclude_urls: List[str] = None) -> List[ContestInf
     exclude_urls = exclude_urls or []
     
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        # GitHub Actions 환경에서의 호환성을 위한 브라우저 옵션
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--disable-gpu',
+            ]
+        )
         
         try:
             # 목록 페이지에서 URL 수집
             logger.info("🔍 Wevity 접수중 공모전 목록 스크래핑 시작 (Playwright)")
             
             html = await get_page_content(WEVITY_LIST_URL, browser)
+            logger.info(f"📝 페이지 HTML 길이: {len(html)}자")
+            
             soup = BeautifulSoup(html, 'html.parser')
             
             contest_urls = []
