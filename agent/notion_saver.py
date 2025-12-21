@@ -96,6 +96,7 @@ class NotionSaver:
         parent_page_id: str,
         contest: ContestInfo,
         top3: List[Submission],
+        all_submissions: List[Submission] = None,
     ) -> str:
         """공모전 결과 페이지 생성
         
@@ -103,6 +104,7 @@ class NotionSaver:
             parent_page_id: 부모(주차) 페이지 ID
             contest: 공모전 정보
             top3: TOP 3 작명
+            all_submissions: 전체 후보 작명들 (선택)
             
         Returns:
             생성된 페이지 ID
@@ -206,7 +208,74 @@ class NotionSaver:
                 },
                 # TOP 3 작명들
                 *submission_blocks,
-                # 푸터
+            ]
+        )
+        
+        # 전체 후보 작명 섹션 추가 (있는 경우)
+        if all_submissions and len(all_submissions) > 3:
+            # 페이지에 블록 추가
+            all_candidates_blocks = [
+                {
+                    "object": "block",
+                    "type": "divider",
+                    "divider": {}
+                },
+                {
+                    "object": "block",
+                    "type": "heading_2",
+                    "heading_2": {
+                        "rich_text": [{"text": {"content": f"📋 전체 후보 작명 ({len(all_submissions)}개)"}}]
+                    }
+                },
+                {
+                    "object": "block",
+                    "type": "toggle",
+                    "toggle": {
+                        "rich_text": [{"text": {"content": "펼쳐서 전체 후보 보기"}}],
+                        "children": []
+                    }
+                },
+            ]
+            
+            # 토글 안에 들어갈 후보들 (TOP 3 제외, 최대 50개)
+            top3_names = {s['name'] for s in top3[:3]}
+            candidates_text = []
+            for i, sub in enumerate(all_submissions[3:50], 4):
+                score = sub.get('score', 0) or 0
+                strategy = sub.get('strategy', 'Unknown')
+                provider = sub.get('provider', 'Unknown')
+                candidates_text.append(f"{i}. {sub['name']} (점수: {score:.0f}, 전략: {strategy}, {provider})")
+            
+            # 토글 children에 텍스트 블록 추가
+            if candidates_text:
+                all_candidates_blocks[2]["toggle"]["children"] = [
+                    {
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{"text": {"content": "\n".join(candidates_text[:20])}}]
+                        }
+                    }
+                ]
+                # 나머지가 있으면 추가 블록
+                if len(candidates_text) > 20:
+                    all_candidates_blocks[2]["toggle"]["children"].append({
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{"text": {"content": "\n".join(candidates_text[20:40])}}]
+                        }
+                    })
+            
+            await self.client.blocks.children.append(
+                block_id=new_page["id"],
+                children=all_candidates_blocks
+            )
+        
+        # 푸터 추가
+        await self.client.blocks.children.append(
+            block_id=new_page["id"],
+            children=[
                 {
                     "object": "block",
                     "type": "divider",
@@ -276,8 +345,12 @@ async def save_to_notion(
     contest: ContestInfo,
     top3: List[Submission],
     week_info: str,
+    all_submissions: List[Submission] = None,
 ) -> Optional[str]:
     """Notion에 결과 저장
+    
+    Args:
+        all_submissions: 전체 후보 작명들 (선택)
     
     Returns:
         성공 시 Notion 페이지 URL, 실패 시 None
@@ -289,8 +362,8 @@ async def save_to_notion(
         # 1. 주차 페이지 찾기/생성
         week_page_id = await saver.find_or_create_week_page(week_info)
         
-        # 2. 공모전 페이지 생성
-        page_id = await saver.create_contest_page(week_page_id, contest, top3)
+        # 2. 공모전 페이지 생성 (전체 후보 포함)
+        page_id = await saver.create_contest_page(week_page_id, contest, top3, all_submissions)
         
         # Notion 페이지 URL 생성
         # page_id 형식: 2cf86726-d532-81f6-949b-c5d7fe570645

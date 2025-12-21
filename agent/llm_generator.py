@@ -177,12 +177,18 @@ class GeminiClient(LLMClient):
         return self._model_name
     
     async def generate(self, system_prompt: str, user_prompt: str) -> str:
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt),
-        ]
-        response = await self.client.ainvoke(messages)
-        return response.content
+        try:
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+            response = await self.client.ainvoke(messages)
+            return response.content
+        except Exception as e:
+            # 429 Rate Limit - 재시도 없이 즉시 스킵
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                raise Exception(f"Rate limit exceeded (429) - skipping")
+            raise
 
 
 class GroqClient(LLMClient):
@@ -214,6 +220,53 @@ class GroqClient(LLMClient):
         return response.content
 
 
+class GitHubAIClient(LLMClient):
+    """GitHub AI 클라이언트 (새 REST API 사용)"""
+    
+    def __init__(self, api_key: Optional[str] = None, model: str = "openai/gpt-4.1-mini"):
+        self.api_key = api_key or os.getenv("GITHUB_TOKEN")
+        self._model_name = model
+        self.endpoint = "https://models.github.ai/inference/chat/completions"
+    
+    @property
+    def provider_name(self) -> str:
+        return "github"
+    
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+    
+    async def generate(self, system_prompt: str, user_prompt: str) -> str:
+        import httpx
+        
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self.api_key}",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json",
+        }
+        
+        payload = {
+            "model": self._model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.9,
+        }
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(self.endpoint, headers=headers, json=payload)
+            
+            # 429 Rate Limit - 재시도 없이 즉시 스킵
+            if response.status_code == 429:
+                raise Exception(f"Rate limit exceeded (429) - skipping")
+            
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+
+
 # ============================================================
 # LLM 제공자 레지스트리 (확장 용이)
 # ============================================================
@@ -238,11 +291,14 @@ def create_llm_clients() -> List[LLMClient]:
         except Exception as e:
             logger.error(f"❌ Groq 클라이언트 초기화 실패: {e}")
     
-    # 나중에 추가할 수 있는 클라이언트들:
-    # if os.getenv("ANTHROPIC_API_KEY"):
-    #     clients.append(AnthropicClient())
-    # if os.getenv("TOGETHER_API_KEY"):
-    #     clients.append(TogetherClient())
+    # GitHub AI
+    if os.getenv("GITHUB_TOKEN"):
+        try:
+            # gpt-4.1-mini (Low tier - 많이 호출 가능)
+            clients.append(GitHubAIClient(model="openai/gpt-4.1-mini"))
+            logger.info("✅ GitHub AI 클라이언트 초기화 성공 (gpt-4.1-mini)")
+        except Exception as e:
+            logger.error(f"❌ GitHub AI 클라이언트 초기화 실패: {e}")
     
     return clients
 
@@ -404,10 +460,12 @@ async def generate_submissions(
                 
                 # Rate limit 대응
                 if client.provider_name == "gemini":
-                    logger.info("⏳ Gemini rate limit 대응: 6초 대기...")
-                    await asyncio.sleep(6)
+                    logger.info("⏳ Gemini rate limit 대응: 10초 대기...")
+                    await asyncio.sleep(10)
                 elif client.provider_name == "groq":
-                    await asyncio.sleep(2)  # Groq도 rate limit 대응
+                    await asyncio.sleep(2)  # Groq rate limit 대응
+                elif client.provider_name == "github":
+                    await asyncio.sleep(10)  # GitHub AI rate limit 대응
                 
             except Exception as e:
                 logger.error(f"❌ {client.provider_name} 생성 실패: {e}")

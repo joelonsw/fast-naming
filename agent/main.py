@@ -206,7 +206,7 @@ class NamingAgent:
         notion_url = None
         if os.getenv("NOTION_API_KEY") and os.getenv("NOTION_PARENT_PAGE_ID"):
             logger.info("   📝 Notion 저장...")
-            notion_url = await save_to_notion(contest, top3, state["week_info"])
+            notion_url = await save_to_notion(contest, top3, state["week_info"], ranked_final)
             result["notion_saved"] = notion_url is not None
         else:
             logger.info("   ⚠️ Notion 설정 없음, 저장 건너뜀")
