@@ -92,7 +92,7 @@ agent/
 # LLM API Keys
 GEMINI_API_KEY=xxx
 GROQ_API_KEY=xxx
-GITHUB_TOKEN=xxx
+AI_GITHUB_TOKEN=xxx
 
 # Slack
 SLACK_WEBHOOK=https://hooks.slack.com/services/xxx

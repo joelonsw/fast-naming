@@ -203,7 +203,7 @@ on:
 env:
   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
   GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 🆕 GitHub AI
+  AI_GITHUB_TOKEN: ${{ secrets.AI_GITHUB_TOKEN }}  # GitHub AI
   SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
   NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
   NOTION_PARENT_PAGE_ID: ${{ secrets.NOTION_PARENT_PAGE_ID }}
@@ -239,7 +239,7 @@ jobs:
 # LLM API Keys
 GEMINI_API_KEY=your_gemini_api_key
 GROQ_API_KEY=your_groq_api_key
-GITHUB_TOKEN=your_github_token  # 🆕 GitHub AI
+AI_GITHUB_TOKEN=your_github_token  # GitHub AI
 
 # Slack
 SLACK_WEBHOOK=https://hooks.slack.com/services/xxx/xxx/xxx

@@ -224,7 +224,7 @@ class GitHubAIClient(LLMClient):
     """GitHub AI 클라이언트 (새 REST API 사용)"""
     
     def __init__(self, api_key: Optional[str] = None, model: str = "openai/gpt-4.1-mini"):
-        self.api_key = api_key or os.getenv("GITHUB_TOKEN")
+        self.api_key = api_key or os.getenv("AI_GITHUB_TOKEN")
         self._model_name = model
         self.endpoint = "https://models.github.ai/inference/chat/completions"
     
@@ -292,7 +292,7 @@ def create_llm_clients() -> List[LLMClient]:
             logger.error(f"❌ Groq 클라이언트 초기화 실패: {e}")
     
     # GitHub AI
-    if os.getenv("GITHUB_TOKEN"):
+    if os.getenv("AI_GITHUB_TOKEN"):
         try:
             # gpt-4.1-mini (Low tier - 많이 호출 가능)
             clients.append(GitHubAIClient(model="openai/gpt-4.1-mini"))
