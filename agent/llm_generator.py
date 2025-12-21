@@ -242,7 +242,6 @@ class GitHubAIClient(LLMClient):
         headers = {
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.api_key}",
-            "X-GitHub-Api-Version": "2022-11-28",
             "Content-Type": "application/json",
         }
         
