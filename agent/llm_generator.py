@@ -240,7 +240,6 @@ class GitHubAIClient(LLMClient):
         import httpx
         
         headers = {
-            "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
