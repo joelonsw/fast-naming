@@ -235,8 +235,71 @@ class NamingAgent:
         return result
 
 
+async def run_single_contest(contest_url: str = None, contest_data: str = None):
+    """단일 공모전 처리 (병렬 실행용)
+    
+    Args:
+        contest_url: 공모전 URL (스크래핑 필요)
+        contest_data: JSON 형태의 공모전 데이터 (스크래핑 불필요)
+    """
+    from scraper import scrape_contest_detail
+    
+    logger.info("=" * 60)
+    logger.info("🎯 단일 공모전 처리 모드")
+    logger.info("=" * 60)
+    
+    state = create_initial_state()
+    
+    # 공모전 정보 획득
+    if contest_data:
+        # JSON 데이터로 직접 전달받은 경우
+        contest = json.loads(contest_data)
+        logger.info(f"📌 공모전: {contest.get('title', contest_url)}")
+    elif contest_url:
+        # URL만 있는 경우 상세 스크래핑
+        logger.info(f"🔍 공모전 URL: {contest_url}")
+        contest = await scrape_contest_detail(contest_url)
+        if not contest:
+            logger.error("❌ 공모전 정보를 가져올 수 없습니다")
+            return None
+        logger.info(f"📌 공모전: {contest['title']}")
+    else:
+        logger.error("❌ contest_url 또는 contest_data가 필요합니다")
+        return None
+    
+    agent = NamingAgent()
+    result = await agent.process_single_contest(contest, state)
+    
+    # 결과 저장
+    os.makedirs("results", exist_ok=True)
+    safe_title = "".join(c for c in contest.get('title', 'unknown')[:30] if c.isalnum() or c in ' -_').strip()
+    result_file = f"results/{safe_title}_{datetime.now().strftime('%H%M%S')}.json"
+    with open(result_file, "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=2, default=str)
+    
+    logger.info(f"📁 결과 저장: {result_file}")
+    return result
+
+
 async def main():
     """메인 함수"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Fast-Naming AI Agent")
+    parser.add_argument("--contest-url", type=str, help="단일 공모전 URL (병렬 처리용)")
+    parser.add_argument("--contest-data", type=str, help="단일 공모전 JSON 데이터")
+    parser.add_argument("--mode", type=str, choices=["all", "single"], default="all",
+                        help="실행 모드: all(전체), single(단일)")
+    args = parser.parse_args()
+    
+    # 단일 공모전 처리 모드
+    if args.contest_url or args.contest_data:
+        return await run_single_contest(
+            contest_url=args.contest_url,
+            contest_data=args.contest_data,
+        )
+    
+    # 전체 처리 모드 (기존 방식)
     agent = NamingAgent()
     results = await agent.run()
     
@@ -253,3 +316,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
