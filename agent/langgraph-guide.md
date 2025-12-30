@@ -100,19 +100,25 @@ stateDiagram-v2
 | **Groq** | `openai/gpt-oss-120b` | 2초 | 자동 재시도 |
 | **GitHub AI** | `openai/gpt-4.1-mini` | 10초 | 재시도 없이 스킵 |
 
-### 2. 8가지 창의적 전략
+### 2. 12가지 창의적 전략 (1등 달성용)
 
 ```python
 CREATIVE_STRATEGIES = [
+    # 기본 전략 (6개)
     {"name": "Keyword Combination", "description": "핵심 키워드 조합"},
     {"name": "Metaphor & Analogy", "description": "은유와 비유"},
     {"name": "Benefit-Oriented", "description": "혜택 중심"},
     {"name": "Wordplay & Wit", "description": "언어유희와 재치"},
     {"name": "Future Vision", "description": "미래 비전"},
     {"name": "Simple & Direct", "description": "단순함과 직관성"},
-    # 🆕 한국어 특화 전략
+    # 한국어 특화 전략 (2개)
     {"name": "Korean Wordplay", "description": "한국어 말장난 (두운, 각운, 의성어)"},
     {"name": "Korean Cultural Reference", "description": "한국 문화적 레퍼런스"},
+    # 🆕 1등 달성용 전략 (4개)
+    {"name": "Winner Perspective", "description": "수상자 관점 역할극"},
+    {"name": "Rhyme & Rhythm", "description": "운율과 리듬감"},
+    {"name": "Emotional Impact", "description": "감정적 울림"},
+    {"name": "Neologism Creation", "description": "신조어 창작"},
 ]
 ```
 

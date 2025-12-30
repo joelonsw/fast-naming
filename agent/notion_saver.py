@@ -297,10 +297,16 @@ class NotionSaver:
         return new_page["id"]
     
     async def get_processed_contest_urls(self) -> List[str]:
-        """이미 처리된 공모전 URL 목록 조회 (중복 방지용)"""
+        """이미 처리된 공모전 URL 목록 조회 (중복 방지용)
+        
+        두 가지 방법으로 중복 체크:
+        1. URL 기반: 페이지 내 callout에서 wevity.com URL 추출
+        2. 제목 기반: 공모전 페이지 제목으로 fallback
+        """
         logger.info("🔍 기존 처리된 공모전 조회")
         
         processed_urls = []
+        processed_titles = []  # 제목 기반 fallback
         
         try:
             # 부모 페이지의 모든 하위 페이지 조회
@@ -313,31 +319,58 @@ class NotionSaver:
                     week_page_id = week_block["id"]
                     
                     # 주차 페이지의 하위 페이지 (공모전 페이지) 조회
-                    week_children = await self.client.blocks.children.list(
-                        block_id=week_page_id
-                    )
+                    try:
+                        week_children = await self.client.blocks.children.list(
+                            block_id=week_page_id
+                        )
+                    except Exception as e:
+                        logger.warning(f"주차 페이지 조회 실패: {e}")
+                        continue
                     
                     for contest_block in week_children.get("results", []):
                         if contest_block["type"] == "child_page":
+                            # 공모전 페이지 제목 저장 (fallback용)
+                            contest_title = contest_block["child_page"].get("title", "")
+                            if contest_title:
+                                processed_titles.append(contest_title)
+                            
                             # 공모전 페이지 내용에서 URL 추출
                             contest_page_id = contest_block["id"]
-                            page_content = await self.client.blocks.children.list(
-                                block_id=contest_page_id
-                            )
+                            try:
+                                page_content = await self.client.blocks.children.list(
+                                    block_id=contest_page_id
+                                )
+                                
+                                for block in page_content.get("results", []):
+                                    # callout 블록에서 URL 추출
+                                    if block["type"] == "callout":
+                                        rich_text = block["callout"].get("rich_text", [])
+                                        for text_item in rich_text:
+                                            if "link" in text_item.get("text", {}):
+                                                url = text_item["text"]["link"].get("url", "")
+                                                if "wevity.com" in url:
+                                                    processed_urls.append(url)
+                                    
+                                    # bookmark 블록에서도 URL 추출 (구조 변경 대비)
+                                    elif block["type"] == "bookmark":
+                                        url = block["bookmark"].get("url", "")
+                                        if "wevity.com" in url:
+                                            processed_urls.append(url)
                             
-                            for block in page_content.get("results", []):
-                                if block["type"] == "callout":
-                                    rich_text = block["callout"].get("rich_text", [])
-                                    for text_item in rich_text:
-                                        if "link" in text_item.get("text", {}):
-                                            url = text_item["text"]["link"].get("url", "")
-                                            if "wevity.com" in url:
-                                                processed_urls.append(url)
+                            except Exception as e:
+                                logger.debug(f"페이지 내용 조회 실패: {e}")
         
         except Exception as e:
             logger.warning(f"기존 URL 조회 중 오류: {e}")
         
-        logger.info(f"📊 기존 처리된 공모전: {len(processed_urls)}개")
+        # 중복 제거
+        processed_urls = list(set(processed_urls))
+        
+        logger.info(f"📊 기존 처리된 공모전: URL {len(processed_urls)}개, 제목 {len(processed_titles)}개")
+        
+        # 제목 목록을 인스턴스 변수에 저장 (나중에 제목 기반 중복 체크에 사용)
+        self._processed_titles = processed_titles
+        
         return processed_urls
 
 

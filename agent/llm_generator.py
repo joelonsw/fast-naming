@@ -102,6 +102,51 @@ CREATIVE_STRATEGIES = [
 - MZ세대가 공감할 수 있는 트렌드 표현 활용
 """
     },
+    # === 신규 전략 4개 (1등 달성용) ===
+    {
+        "name": "Winner Perspective",
+        "description": "수상자 관점",
+        "prompt_injection": """
+**전략: 수상자 관점 (역할극)**
+당신은 이미 이 공모전에서 1등을 수상한 작가입니다.
+- 심사위원들이 왜 당신의 작품을 선택했는지 설명하면서
+- 그 작품이 무엇이었는지 공개하세요
+- 다른 작품들을 제치고 선정된 결정적 이유를 담으세요
+"""
+    },
+    {
+        "name": "Rhyme & Rhythm",
+        "description": "운율과 리듬감",
+        "prompt_injection": """
+**전략: 운율과 리듬감**
+- 4음절, 7음절 등 읽기 좋은 리듬을 만드세요
+- 반복, 대구, 점층 구조를 활용하세요
+- 소리 내어 읽었을 때 귀에 꼽히는 작명을 만드세요
+- 예: "함께 떠나요, 함께 자라요", "컨네면 컨네"
+"""
+    },
+    {
+        "name": "Emotional Impact",
+        "description": "감정적 울림",
+        "prompt_injection": """
+**전략: 감정적 울림**
+- 보는 순간 감동이나 설렘을 주는 작명을 만드세요
+- 희망, 사랑, 껼림, 감사 등 보편적 감정을 자극하세요
+- 심사위원의 마음을 움직이는 선정적 요소를 넣으세요
+- 예: "당신의 꼀에 날개를", "오늘이 내일을 만든다"
+"""
+    },
+    {
+        "name": "Neologism Creation",
+        "description": "신조어 창작",
+        "prompt_injection": """
+**전략: 신조어 창작**
+- 기존에 없는 완전히 새로운 단어를 만드세요
+- 두 단어를 합성하거나 발음을 변형하여 독창적인 이름을 만드세요
+- 상표 등록이 가능할 정도로 독특해야 합니다
+- 예: "컧럭터" (게 + 캐릭터), "맬스플레인" (맨들 + 설명), "코린이"(코렜 린스)
+"""
+    },
 ]
 
 
@@ -306,9 +351,17 @@ def create_llm_clients() -> List[LLMClient]:
 # ============================================================
 
 def create_system_prompt(contest: ContestInfo) -> str:
-    """시스템 프롬프트 생성"""
-    return f'''당신은 대한민국 최고의 네이미스트입니다.
+    """Chain-of-Thought 시스템 프롬프트 생성"""
+    return f'''당신은 대한민국 최고의 네이미스트이며, 수많은 공모전에서 1등을 수상한 경험이 있습니다.
 당신은 주최측이 원하는 {contest["contest_type"]}을 무조건 제공하는 네이미스트입니다.
+
+**Chain-of-Thought 접근법을 사용하세요:**
+1. 먼저, 공모전의 핵심 요구사항을 분석하세요.
+2. 다음으로, 주최기관의 특성과 가치를 파악하세요.
+3. 대상 청중(심사위원)이 선호할 스타일을 고려하세요.
+4. 역대 수상작의 공통 패턴을 참고하세요.
+5. 위 분석을 바탕으로 최적의 작명 3개를 도출하세요.
+
 반드시 JSON 형식으로만 응답해야 합니다.'''
 
 
@@ -322,7 +375,29 @@ def create_user_prompt(
     # 예시 선택 (최대 2개)
     selected_examples = random.sample(examples, min(2, len(examples))) if examples else []
     
-    prompt = f"{contest['title']}에 참여하여 수상 확률이 가장 높은 3가지 {contest['contest_type']}을 만드세요.\n\n"
+    # 공모전 유형 명시적 지시
+    contest_type = contest['contest_type']
+    type_instruction = ""
+    if contest_type == "슬로건":
+        type_instruction = """
+**중요: 이 공모전은 '슬로건' 공모전입니다!**
+- 슬로건은 짧고 기억에 남는 문구입니다 (예: "함께 만드는 행복한 미래")
+- 네이밍(이름)이 아닌 홍보 문구/캐치프레이즈를 만들어야 합니다
+- 보통 한 문장 또는 짧은 문구 형태입니다
+"""
+    elif contest_type == "네이밍":
+        type_instruction = """
+**중요: 이 공모전은 '네이밍' 공모전입니다!**
+- 네이밍은 이름/명칭입니다 (예: "스마트라이프", "드림파크")
+- 슬로건(문구)이 아닌 브랜드명/서비스명/제품명을 만들어야 합니다
+- 보통 1~4단어의 이름 형태입니다
+"""
+    
+    prompt = f"{contest['title']}에 참여하여 수상 확률이 가장 높은 3가지 {contest_type}을 만드세요.\n\n"
+    
+    # 유형 명시적 지시 추가
+    if type_instruction:
+        prompt += type_instruction + "\n"
     
     # 공모전 유형별 특화 프롬프트 추가
     held_by_type = contest.get('held_by_type', '')
@@ -341,27 +416,29 @@ def create_user_prompt(
             prompt += f"<ideal_output{i}>\n{example.get('contestWinner', '')}\n</ideal_output{i}>\n"
             prompt += f"<strength{i}>\n{example.get('strength', '')}\n</strength{i}>\n\n"
     
-    prompt += """guidelines:
+    prompt += f"""guidelines:
 1. 공모전 요구사항을 모두 준수해야 합니다.
 2. 주최기관에서 좋아할 작명이어야 합니다.
 3. 독창적이고 기억에 남는 작명을 만드세요.
 4. 한국어의 아름다움과 리듬감을 살리세요.
+5. 심사위원이 '이건 1등이다!'라고 느낄 만한 작품을 만드세요.
+6. **반드시 '{contest_type}' 형식으로 생성하세요!**
 
 반드시 다음 JSON 형식으로만 응답하세요:
 ```json
 [
-    {
-        "submission": "작명 내용",
+    {{
+        "submission": "{contest_type} 내용",
         "description": "해당 작명을 생성한 이유와 특징 설명"
-    },
-    {
-        "submission": "작명 내용",
+    }},
+    {{
+        "submission": "{contest_type} 내용",
         "description": "해당 작명을 생성한 이유와 특징 설명"
-    },
-    {
-        "submission": "작명 내용",
+    }},
+    {{
+        "submission": "{contest_type} 내용",
         "description": "해당 작명을 생성한 이유와 특징 설명"
-    }
+    }}
 ]
 ```"""
     

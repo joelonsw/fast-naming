@@ -21,62 +21,58 @@ AI 기반 네이밍/슬로건 공모전 작명 자동화 프로젝트
 
 **실행**: GitHub Actions (3일마다 한국시간 22:00)
 
-Wevity 공모전 사이트를 자동으로 스크래핑하여 작명을 생성하고 알림을 보내는 AI Agent.
+Wevity 공모전 사이트를 자동으로 스크래핑하여 **1등 수상**을 목표로 작명을 생성하고 알림을 보내는 AI Agent.
 
-- **Playwright** 기반 웹 스크래핑
-- **Gemini + Groq + GitHub AI** LLM으로 작명 생성
-- **8가지 창의적 전략** (한국어 특화 포함)
-- **Slack** 알림 및 **Notion** 결과 저장
-- 중복 처리 방지 (이미 처리한 공모전 제외)
+### ✨ 핵심 기능
+
+- **12가지 창의적 전략** (한국어 특화 + 1등 달성용 4가지 추가)
+- **Multi-Agent 평가** (3개 LLM 교차 평가)
+- **재귀적 자기 학습** (Self-Learning Engine)
+- **Tournament 선별** + 최종 폴리싱
+- **Chain-of-Thought** 프롬프트
 
 ### 🔄 Agent 워크플로우
 
 ```mermaid
 flowchart LR
-    subgraph Scrape["1. 스크래핑"]
-        A[Wevity 접속] --> B[공모전 목록 수집]
-        B --> C[상세 정보 파싱]
+    subgraph Phase1[생성]
+        A[스크래핑] --> B[12 전략 × 3 LLM]
     end
     
-    subgraph Generate["2. 작명 생성"]
-        D[Few-shot 예시 로드] --> E[다중 LLM 호출]
-        E --> F[8가지 전략 적용]
+    subgraph Phase2[자기학습]
+        C[패턴 분석] --> D[프롬프트 개선]
+        D --> E[재생성 ×2회]
     end
     
-    subgraph Quality["3. 품질 향상"]
-        G[중복 제거] --> H[다양성 보장]
-        H --> I[TOP 10 정제]
+    subgraph Phase3[평가]
+        F[Multi-Agent 평가] --> G[Self-Critique]
     end
     
-    subgraph Evaluate["4. 평가"]
-        J[평가 기준 생성] --> K[작명 채점]
-        K --> L[TOP 3 선정]
+    subgraph Phase4[선별]
+        H[Tournament] --> I[최종 폴리싱]
     end
     
-    subgraph Notify["5. 알림"]
-        M[Notion 저장] --> N[Slack 알림]
-    end
-    
-    Scrape --> Generate --> Quality --> Evaluate --> Notify
+    Phase1 --> Phase2 --> Phase3 --> Phase4 --> J[Notion/Slack]
 ```
 
 ### 📊 LLM 구성
 
 | 제공자 | 모델 | Rate Limit | 용도 |
 |--------|------|:----------:|------|
-| **Gemini** | gemini-2.5-flash-lite | 10초 | 작명 생성 |
-| **Groq** | openai/gpt-oss-120b | 2초 | 작명 생성 / 평가 |
-| **GitHub AI** | openai/gpt-4.1-mini | 10초 | 작명 생성 |
+| **Gemini** | gemini-2.5-flash-lite | 10초 | 작명 생성 / 평가 |
+| **Groq** | openai/gpt-oss-120b | 2초 | 작명 생성 / 평가 / 자기학습 |
+| **GitHub AI** | openai/gpt-4.1-mini | 10초 | 작명 생성 / 평가 |
 
 ### 📂 Agent 파일 구조
 
 ```
 agent/
-├── main.py              # 메인 실행 파일
+├── main.py              # 메인 실행 (강화된 파이프라인)
 ├── scraper.py           # Wevity 스크래핑
-├── llm_generator.py     # LLM 작명 생성
-├── evaluator.py         # 작명 평가
-├── refiner.py           # 품질 향상 (중복 제거, 정제)
+├── llm_generator.py     # LLM 작명 생성 (12가지 전략)
+├── evaluator.py         # Multi-Agent 평가 시스템
+├── refiner.py           # 품질 향상 (Tournament + 폴리싱)
+├── self_learning.py     # 🆕 재귀적 자기 학습 엔진
 ├── slack_notifier.py    # Slack 알림
 ├── notion_saver.py      # Notion 저장
 ├── examples_loader.py   # Few-shot 예시 로드

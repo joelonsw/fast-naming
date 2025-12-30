@@ -114,7 +114,7 @@ class NamingAgent:
         contest: ContestInfo, 
         state: NamingAgentState
     ) -> Dict[str, Any]:
-        """단일 공모전 처리"""
+        """단일 공모전 처리 - 1등 달성을 위한 강화된 파이프라인"""
         
         result = {
             "contest_title": contest["title"],
@@ -125,7 +125,7 @@ class NamingAgent:
             "notion_saved": False,
         }
         
-        # 3.1 Few-shot 예시 로드
+        # === Phase 1: 초기 생성 ===
         logger.info("   📚 Few-shot 예시 로드...")
         examples = get_examples_for_contest(
             contest["contest_type"],
@@ -133,8 +133,7 @@ class NamingAgent:
         )
         logger.info(f"   → {len(examples)}개 예시 로드됨")
         
-        # 3.2 작명 생성
-        logger.info("   🤖 작명 생성 중...")
+        logger.info("   🤖 작명 생성 중 (12가지 전략 × 3 LLM)...")
         submissions = await generate_submissions(
             contest=contest,
             examples=examples,
@@ -147,71 +146,88 @@ class NamingAgent:
             logger.warning("   ⚠️ 작명이 생성되지 않았습니다")
             return result
         
-        # 3.3 평가 기준 생성
+        # === Phase 2: 평가 기준 생성 및 Multi-Agent 평가 ===
         logger.info("   📊 평가 기준 생성...")
         criteria = await generate_evaluation_criteria(contest)
         logger.info(f"   → 평가 기준: {criteria}")
         
-        # 3.4 작명 평가
-        logger.info("   🎯 작명 평가 중...")
-        evaluated = await evaluate_submissions(contest, submissions, criteria)
+        logger.info("   🎯 Multi-Agent 평가 중 (3 LLM 교차 평가)...")
+        evaluated = await evaluate_submissions(contest, submissions, criteria, use_multi_agent=True)
         
-        # === 품질 향상 프로세스 ===
+        # === Phase 3: 재귀적 자기 학습 ===
+        from self_learning import SelfLearningEngine
         from refiner import (
             remove_duplicates, 
             ensure_strategy_diversity, 
-            refine_top_submissions
+            refine_top_submissions,
+            tournament_selection,
+            final_polish,
         )
         
-        # 3.5 중복 제거
-        logger.info("   🧹 중복 제거...")
-        unique_submissions = remove_duplicates(evaluated, similarity_threshold=0.6)
-        logger.info(f"   → {len(evaluated)} → {len(unique_submissions)}개 (중복 제거됨)")
+        logger.info("   🔄 재귀적 자기 학습 시작...")
+        learning_engine = SelfLearningEngine()
+        all_submissions = await learning_engine.recursive_improvement_cycle(
+            contest=contest,
+            initial_submissions=evaluated,
+            evaluate_fn=evaluate_submissions,
+            criteria=criteria,
+            max_iterations=2,  # 최대 2회 반복 (rate limit 고려)
+            target_score=92.0,
+        )
         
-        # 3.6 순위 정렬
+        learning_summary = learning_engine.get_learning_summary()
+        logger.info(f"   → 학습 완료: 총 {learning_summary['total_iterations']}회 반복")
+        
+        # === Phase 4: 품질 향상 ===
+        logger.info("   🧹 중복 제거...")
+        unique_submissions = remove_duplicates(all_submissions, similarity_threshold=0.6)
+        logger.info(f"   → {len(all_submissions)} → {len(unique_submissions)}개")
+        
         ranked = rank_submissions(unique_submissions)
         
-        # 3.7 다양성 보장하여 TOP 10 선정
         logger.info("   🎯 전략 다양성 보장...")
         top10 = ensure_strategy_diversity(ranked, top_n=10)
         
-        # 3.8 TOP 10 정제 (개선된 버전 생성)
         logger.info("   ✨ TOP 10 정제 중...")
         refined = await refine_top_submissions(contest, top10, None)
         
-        # 정제된 작명도 평가
         if refined:
             logger.info("   🎯 정제된 작명 평가 중...")
-            refined_evaluated = await evaluate_submissions(contest, refined, criteria)
+            refined_evaluated = await evaluate_submissions(contest, refined, criteria, use_multi_agent=False)
             top10.extend(refined_evaluated)
-            
-            # 다시 정렬
-            ranked_final = rank_submissions(top10)
+            ranked_with_refined = rank_submissions(top10)
         else:
-            ranked_final = top10
+            ranked_with_refined = top10
         
-        # 3.9 최종 TOP 3 선정
-        top3 = get_top_n(ranked_final, 3)
+        # === Phase 5: Tournament 선별 ===
+        logger.info("   🏆 토너먼트 선별...")
+        finalists = await tournament_selection(contest, ranked_with_refined, final_count=5)
+        
+        # === Phase 6: 최종 폴리싱 ===
+        logger.info("   💎 최종 폴리싱...")
+        polished = await final_polish(contest, finalists)
+        
+        # 최종 TOP 3 선정
+        top3 = get_top_n(polished, 3)
         result["top3"] = [
             {"name": s["name"], "score": s.get("score", 0)}
             for s in top3
         ]
         
-        logger.info("   🏆 TOP 3:")
+        logger.info("   🏆 최종 TOP 3:")
         for i, sub in enumerate(top3, 1):
             score = sub.get("score", 0) or 0
             logger.info(f"      {i}. {sub['name']} (점수: {score:.1f})")
         
-        # 3.10 Notion 저장 (Slack보다 먼저 - 링크 얻기 위해)
+        # === Phase 7: 저장 및 알림 ===
         notion_url = None
         if os.getenv("NOTION_API_KEY") and os.getenv("NOTION_PARENT_PAGE_ID"):
             logger.info("   📝 Notion 저장...")
-            notion_url = await save_to_notion(contest, top3, state["week_info"], ranked_final)
+            notion_url = await save_to_notion(contest, top3, state["week_info"], polished)
             result["notion_saved"] = notion_url is not None
         else:
-            logger.info("   ⚠️ Notion 설정 없음, 저장 건너뜀")
+            logger.info("   ⚠️ Notion 설정 없음")
         
-        # 3.11 Slack 알림 (Notion 링크 포함)
         logger.info("   📤 Slack 알림 전송...")
         slack_sent = await send_slack_notification(contest, top3, notion_url)
         result["slack_sent"] = slack_sent

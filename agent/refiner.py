@@ -117,16 +117,7 @@ async def refine_top_submissions(
     top_submissions: List[Submission],
     groq_client,
 ) -> List[Submission]:
-    """TOP 작명들을 분석하고 개선된 버전 생성
-    
-    Args:
-        contest: 공모전 정보
-        top_submissions: TOP N 작명들
-        groq_client: Groq 클라이언트
-        
-    Returns:
-        정제된 작명 목록 (원본 + 개선본)
-    """
+    """TOP 작명들을 분석하고 개선된 버전 생성"""
     from langchain_groq import ChatGroq
     from langchain_core.messages import HumanMessage
     import os
@@ -135,7 +126,6 @@ async def refine_top_submissions(
     
     logger.info(f"✨ TOP {len(top_submissions)}개 작명 정제 시작")
     
-    # TOP 작명들 텍스트로 변환
     top_text = ""
     for i, sub in enumerate(top_submissions, 1):
         score = sub.get('score', 0) or 0
@@ -174,14 +164,12 @@ async def refine_top_submissions(
         
         response = await groq.ainvoke([HumanMessage(content=prompt)])
         
-        # JSON 파싱
         json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
         if json_match:
             refined = json.loads(json_match.group(1))
         else:
             refined = json.loads(response.content.strip())
         
-        # 정제된 작명을 Submission으로 변환
         refined_submissions = []
         for item in refined:
             sub = Submission(
@@ -196,8 +184,6 @@ async def refine_top_submissions(
             refined_submissions.append(sub)
         
         logger.info(f"✅ {len(refined_submissions)}개 정제된 작명 생성됨")
-        
-        # Rate limit 대응
         await asyncio.sleep(3)
         
         return refined_submissions
@@ -205,6 +191,176 @@ async def refine_top_submissions(
     except Exception as e:
         logger.error(f"❌ 정제 실패: {e}")
         return []
+
+
+# ============================================================
+# Tournament Selection System (1등 달성용)
+# ============================================================
+
+async def tournament_selection(
+    contest,
+    submissions: List[Submission],
+    final_count: int = 5,
+) -> List[Submission]:
+    """토너먼트 방식으로 최종 후보 선정
+    
+    Round 1: 점수 기준 상위 20개+
+    Round 2: 전략 다양성 보장
+    Round 3: 1:1 대결을 통한 최종 선정
+    """
+    from langchain_groq import ChatGroq
+    from langchain_core.messages import HumanMessage
+    import os
+    import json
+    import re
+    
+    logger.info(f"🏆 토너먼트 선정 시작 ({len(submissions)}개 → {final_count}개)")
+    
+    if len(submissions) <= final_count:
+        return submissions
+    
+    # Round 1: 상위 20개 선정
+    round1 = sorted(submissions, key=lambda x: x.get('score', 0) or 0, reverse=True)[:20]
+    logger.info(f"   Round 1: {len(submissions)} → {len(round1)}개 (점수 기준)")
+    
+    # Round 2: 전략 다양성 보장
+    round2 = ensure_strategy_diversity(round1, top_n=10)
+    logger.info(f"   Round 2: {len(round1)} → {len(round2)}개 (전략 다양성)")
+    
+    # Round 3: 1:1 대결 토너먼트
+    finalists = await _run_head_to_head_tournament(contest, round2, final_count)
+    logger.info(f"   Round 3: {len(round2)} → {len(finalists)}개 (1:1 토너먼트)")
+    
+    return finalists
+
+
+async def _run_head_to_head_tournament(
+    contest,
+    submissions: List[Submission],
+    final_count: int,
+) -> List[Submission]:
+    """1:1 대결을 통한 토너먼트"""
+    from langchain_groq import ChatGroq
+    from langchain_core.messages import HumanMessage
+    import os
+    import json
+    import re
+    
+    if len(submissions) <= final_count:
+        return submissions
+    
+    groq = ChatGroq(
+        model="openai/gpt-oss-120b",
+        api_key=os.getenv("GROQ_API_KEY"),
+        temperature=0.3,
+    )
+    
+    # 상위 5개 vs 나머지에서 대결
+    top = submissions[:final_count]
+    challengers = submissions[final_count:]
+    
+    for challenger in challengers[:3]:  # 최대 3개만 도전
+        weakest_top = min(top, key=lambda x: x.get('score', 0) or 0)
+        
+        prompt = f"""다음 두 작명 중 "{contest['title']}" 공모전에서 1등할 가능성이 더 높은 것을 선택하세요.
+
+A: {weakest_top['name']}
+B: {challenger['name']}
+
+반드시 JSON으로 응답: {{"winner": "A" 또는 "B", "reason": "선택 이유"}}"""
+        
+        try:
+            response = await groq.ainvoke([HumanMessage(content=prompt)])
+            json_match = re.search(r'\{[\s\S]*\}', response.content)
+            if json_match:
+                result = json.loads(json_match.group())
+                if result.get('winner') == 'B':
+                    top.remove(weakest_top)
+                    top.append(challenger)
+                    logger.info(f"   🔄 교체: '{weakest_top['name']}' → '{challenger['name']}'")
+            
+            await asyncio.sleep(2)
+        except Exception as e:
+            logger.error(f"대결 실패: {e}")
+    
+    return top
+
+
+async def final_polish(
+    contest,
+    top_submissions: List[Submission],
+) -> List[Submission]:
+    """최종 후보 폴리싱 - 1등 달성을 위한 마지막 다듬기"""
+    from langchain_groq import ChatGroq
+    from langchain_core.messages import HumanMessage
+    import os
+    import json
+    import re
+    
+    logger.info(f"💎 최종 폴리싱 시작 ({len(top_submissions)}개)")
+    
+    groq = ChatGroq(
+        model="openai/gpt-oss-120b",
+        api_key=os.getenv("GROQ_API_KEY"),
+        temperature=0.5,
+    )
+    
+    polished = []
+    
+    for sub in top_submissions[:3]:  # TOP 3만 폴리싱
+        prompt = f"""당신은 "{contest['title']}" 공모전 심사위원입니다.
+
+다음 작명을 1등으로 만들기 위해 미세하게 다듬으세요:
+- 현재 작명: {sub['name']}
+- 설명: {sub['description']}
+
+다음 중 하나를 선택하세요:
+1. 현재 작명이 이미 완벽하면 그대로 유지
+2. 미세한 수정이 필요하면 개선된 버전 제안
+
+반드시 JSON으로 응답:
+```json
+{{
+    "final_name": "최종 작명 (수정 또는 원본 유지)",
+    "polished": true/false,
+    "polish_reason": "수정 이유 또는 '원본 유지'"
+}}
+```"""
+        
+        try:
+            response = await groq.ainvoke([HumanMessage(content=prompt)])
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
+            if json_match:
+                result = json.loads(json_match.group(1))
+            else:
+                result = json.loads(response.content.strip())
+            
+            if result.get('polished'):
+                polished_sub = Submission(
+                    name=result['final_name'],
+                    description=f"[폴리싱됨] {result['polish_reason']} | 원본: {sub['name']}",
+                    strategy=f"{sub['strategy']}-Polished",
+                    provider=sub['provider'],
+                    model=sub['model'],
+                    score=sub.get('score'),
+                    criteria_scores=sub.get('criteria_scores'),
+                )
+                polished.append(polished_sub)
+                logger.info(f"   ✨ '{sub['name']}' → '{result['final_name']}'")
+            else:
+                polished.append(sub)
+                logger.info(f"   ✅ '{sub['name']}' 유지")
+            
+            await asyncio.sleep(2)
+            
+        except Exception as e:
+            logger.error(f"폴리싱 실패: {e}")
+            polished.append(sub)
+    
+    # 나머지는 그대로 추가
+    polished.extend(top_submissions[3:])
+    
+    return polished
 
 
 def get_korean_special_strategies() -> List[Dict]:

@@ -198,17 +198,76 @@ async def scrape_contest_detail(url: str, browser: Browser = None) -> Optional[C
 
 
 def detect_contest_type(field: str, title: str, content: str) -> str:
-    """분야, 제목, 내용에서 공모전 유형 감지"""
-    text = (field + title + content).lower()
+    """분야, 제목, 내용에서 공모전 유형 감지
     
-    if '슬로건' in text or '캐치프레이즈' in text:
+    우선순위:
+    1. 제목에서 명시적으로 언급된 유형
+    2. 분야(field)에서 언급된 유형  
+    3. 내용에서 언급된 유형
+    4. 기본값: 네이밍
+    """
+    # 제목 우선 검사 (가장 신뢰할 수 있는 소스)
+    title_lower = title.lower()
+    
+    # 슬로건 키워드 (우선 순위 높음)
+    slogan_keywords = ['슬로건', '캐치프레이즈', '캐치 프레이즈', '구호', '표어', '홍보문구', '홍보 문구']
+    # 네이밍 키워드
+    naming_keywords = ['네이밍', '명칭', '브랜드명', '브랜드 명', '상호명', '상호 명', '서비스명', 
+                       '제품명', '앱이름', '앱 이름', '캠페인명', '축제명', '행사명']
+    
+    # 1. 제목에서 먼저 검사
+    for keyword in slogan_keywords:
+        if keyword in title_lower:
+            logger.info(f"📌 공모전 유형 감지: 슬로건 (제목에서 '{keyword}' 발견)")
+            return '슬로건'
+    
+    for keyword in naming_keywords:
+        if keyword in title_lower:
+            logger.info(f"📌 공모전 유형 감지: 네이밍 (제목에서 '{keyword}' 발견)")
+            return '네이밍'
+    
+    # 2. 분야에서 검사
+    field_lower = field.lower()
+    for keyword in slogan_keywords:
+        if keyword in field_lower:
+            logger.info(f"📌 공모전 유형 감지: 슬로건 (분야에서 '{keyword}' 발견)")
+            return '슬로건'
+    
+    for keyword in naming_keywords:
+        if keyword in field_lower:
+            logger.info(f"📌 공모전 유형 감지: 네이밍 (분야에서 '{keyword}' 발견)")
+            return '네이밍'
+    
+    # 3. 내용에서 검사 (앞부분 500자만 - 일반적으로 주요 정보가 앞에 있음)
+    content_lower = content[:500].lower()
+    
+    # "~를 공모합니다" 패턴 검사
+    import re
+    slogan_pattern = r'(슬로건|캐치프레이즈|구호|표어).{0,20}(공모|모집|선정)'
+    naming_pattern = r'(네이밍|명칭|이름|브랜드명).{0,20}(공모|모집|선정)'
+    
+    if re.search(slogan_pattern, content_lower):
+        logger.info(f"📌 공모전 유형 감지: 슬로건 (내용에서 패턴 발견)")
         return '슬로건'
-    elif '네이밍' in text or '명칭' in text or '이름' in text or '브랜드명' in text:
+    
+    if re.search(naming_pattern, content_lower):
+        logger.info(f"📌 공모전 유형 감지: 네이밍 (내용에서 패턴 발견)")
         return '네이밍'
-    elif '마스코트' in text or '캐릭터' in text:
+    
+    # 4. 단순 키워드 검사 (fallback)
+    for keyword in slogan_keywords:
+        if keyword in content_lower:
+            logger.info(f"📌 공모전 유형 감지: 슬로건 (내용에서 '{keyword}' 발견)")
+            return '슬로건'
+    
+    # 마스코트/캐릭터 체크
+    if '마스코트' in content_lower or '캐릭터' in content_lower:
+        logger.info(f"📌 공모전 유형 감지: 마스코트")
         return '마스코트'
-    else:
-        return '네이밍'  # 기본값
+    
+    # 기본값
+    logger.info(f"📌 공모전 유형 감지: 네이밍 (기본값)")
+    return '네이밍'
 
 
 def detect_held_by_type(held_by: str, content: str) -> str:
