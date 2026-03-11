@@ -326,13 +326,19 @@ def create_llm_clients() -> List[LLMClient]:
         except Exception as e:
             logger.error(f"❌ Gemini 클라이언트 초기화 실패: {e}")
     
-    # Groq
+    # Groq (Two models for diversity)
     if os.getenv("GROQ_API_KEY"):
         try:
-            clients.append(GroqClient())
-            logger.info("✅ Groq 클라이언트 초기화 성공")
+            clients.append(GroqClient(model="openai/gpt-oss-120b"))
+            logger.info("✅ Groq 클라이언트 초기화 성공 (gpt-oss-120b)")
         except Exception as e:
-            logger.error(f"❌ Groq 클라이언트 초기화 실패: {e}")
+            logger.error(f"❌ Groq 클라이언트 초기화 실패 (gpt-oss-120b): {e}")
+            
+        try:
+            clients.append(GroqClient(model="llama-3.3-70b-versatile"))
+            logger.info("✅ Groq 클라이언트 초기화 성공 (llama-3.3-70b-versatile)")
+        except Exception as e:
+            logger.error(f"❌ Groq 클라이언트 초기화 실패 (llama-3.3-70b-versatile): {e}")
     
     # GitHub AI
     if os.getenv("AI_GITHUB_TOKEN"):

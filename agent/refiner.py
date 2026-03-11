@@ -157,7 +157,7 @@ async def refine_top_submissions(
     
     try:
         groq = ChatGroq(
-            model="openai/gpt-oss-120b",
+            model="llama-3.3-70b-versatile",
             api_key=os.getenv("GROQ_API_KEY"),
             temperature=0.8,
         )
@@ -177,7 +177,7 @@ async def refine_top_submissions(
                 description=f"[정제됨] {item['description']}",
                 strategy="Refined",
                 provider="groq",
-                model="openai/gpt-oss-120b",
+                model="llama-3.3-70b-versatile",
                 score=None,
                 criteria_scores=None,
             )
@@ -250,7 +250,7 @@ async def _run_head_to_head_tournament(
         return submissions
     
     groq = ChatGroq(
-        model="openai/gpt-oss-120b",
+        model="llama-3.3-70b-versatile",
         api_key=os.getenv("GROQ_API_KEY"),
         temperature=0.3,
     )
@@ -300,7 +300,7 @@ async def final_polish(
     logger.info(f"💎 최종 폴리싱 시작 ({len(top_submissions)}개)")
     
     groq = ChatGroq(
-        model="openai/gpt-oss-120b",
+        model="llama-3.3-70b-versatile",
         api_key=os.getenv("GROQ_API_KEY"),
         temperature=0.5,
     )
@@ -314,16 +314,20 @@ async def final_polish(
 - 현재 작명: {sub['name']}
 - 설명: {sub['description']}
 
+중요한 점은, 단순히 수정 이유만 말하는 것이 아니라 **공모전 주최측에 직접 제출할 수 있는 완벽하고 설득력 있는 '작명 배경 및 의미(Naming Reason)'를 작성해야 한다는 것입니다.**
+보는 순간 1등이 확신되는 감동적이고 매력적인 설명이어야 합니다.
+
 다음 중 하나를 선택하세요:
-1. 현재 작명이 이미 완벽하면 그대로 유지
-2. 미세한 수정이 필요하면 개선된 버전 제안
+1. 현재 작명이 이미 완벽하면 그대로 유지하되 제출용 설명만 다듬기
+2. 미세한 수정이 필요하면 개선된 버전 제안 및 제출용 설명 작성
 
 반드시 JSON으로 응답:
 ```json
 {{
     "final_name": "최종 작명 (수정 또는 원본 유지)",
+    "final_description": "공모전 제출용으로 바로 복사붙여넣기 할 수 있는 완벽한 '작명 배경 및 의미' (2~3문장)",
     "polished": true/false,
-    "polish_reason": "수정 이유 또는 '원본 유지'"
+    "polish_reason": "무엇을 왜 수정했는지 심사위원 관점의 분석 이유"
 }}
 ```"""
         
@@ -338,7 +342,7 @@ async def final_polish(
             if result.get('polished'):
                 polished_sub = Submission(
                     name=result['final_name'],
-                    description=f"[폴리싱됨] {result['polish_reason']} | 원본: {sub['name']}",
+                    description=f"{result.get('final_description', result.get('polish_reason', ''))}\n\n*[폴리싱됨] 심사위원 노트: {result.get('polish_reason', '')} | 원본: {sub['name']}*",
                     strategy=f"{sub['strategy']}-Polished",
                     provider=sub['provider'],
                     model=sub['model'],

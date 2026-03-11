@@ -291,7 +291,9 @@ def detect_held_by_type(held_by: str, content: str) -> str:
 
 def extract_submission_method(content: str) -> str:
     """내용에서 제출방법 추출"""
-    # 제출방법 관련 섹션 찾기
+    
+    # 먼저 원문에서 제출 방법 관련 텍스트 추출 시도
+    method = "상세 내용 참조"
     patterns = [
         r'(?:제출|접수|응모)\s*(?:방법|방식)[:\s]*(.+?)(?:\n|$)',
         r'(?:■|●|▶)\s*(?:제출|접수|응모)\s*(?:방법|방식)(.+?)(?:■|●|▶|$)',
@@ -301,18 +303,41 @@ def extract_submission_method(content: str) -> str:
     for pattern in patterns:
         match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
         if match:
-            method = match.group(1).strip()
+            found_method = match.group(1).strip()
             # 너무 긴 경우 첫 200자만
-            if len(method) > 300:
-                method = method[:300] + "..."
-            return method
+            if len(found_method) > 300:
+                found_method = found_method[:300] + "..."
+            method = found_method
+            break
     
-    # 패턴으로 찾지 못한 경우, 이메일이나 URL 찾기
-    email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', content)
-    if email_match:
-        return f"이메일 제출: {email_match.group()}"
+    if method == "상세 내용 참조":
+        # 패턴으로 찾지 못한 경우, 이메일이나 URL 찾기
+        email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', content)
+        if email_match:
+            method = f"이메일 제출: {email_match.group()}"
+            
+    # 제출방법 태그 분석 (전체 content 대상)
+    content_lower = content.lower()
+    tags = []
     
-    return "상세 내용 참조"
+    if any(k in content_lower for k in ["구글폼", "google form", "forms.gle"]):
+        tags.append("구글폼")
+    if any(k in content_lower for k in ["네이버폼", "naver form", "naver.me"]):
+        tags.append("네이버폼")
+    if any(k in content_lower for k in ["이메일", "e-mail", "email"]) or re.search(r'[\w\.-]+@[\w\.-]+\.\w+', content):
+        tags.append("이메일")
+    if any(k in content_lower for k in ["hwp", "한글", "신청서", "붙임", "서식"]):
+        tags.append("신청서 작성(HWP등)")
+    if any(k in content_lower for k in ["우편", "방문"]):
+        tags.append("우편/방문")
+    if any(k in content_lower for k in ["홈페이지", "온라인"]):
+        tags.append("온라인 접수")
+        
+    tag_prefix = ""
+    if tags:
+        tag_prefix = f"[{', '.join(set(tags))}] "
+        
+    return tag_prefix + method
 
 
 async def scrape_all_contests(exclude_urls: List[str] = None) -> List[ContestInfo]:
