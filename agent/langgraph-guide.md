@@ -4,7 +4,7 @@
 
 이 Agent는 **GitHub Actions를 통해 3일마다 자동 실행**되어:
 1. Wevity 공모전 사이트에서 진행중인 네이밍/슬로건 공모전을 자동 수집
-2. **다중 LLM (Gemini, Groq, GitHub AI)**을 활용하여 최적의 작명을 생성 및 평가
+2. **다중 LLM (Hugging Face, Gemini, Groq, GitHub AI)**을 활용하여 최적의 작명을 생성 및 평가
 3. **8가지 창의적 전략** (한국어 특화 포함) 적용
 4. **중복 제거 → 다양성 보장 → 반복 정제** 품질 향상 프로세스
 5. TOP 3 결과를 Slack으로 알림 (Notion 링크 포함)
@@ -33,9 +33,10 @@ flowchart TD
         W[(Wevity.com)]
         S[(Slack)]
         N[(Notion)]
-        LLM1[(Gemini API)]
-        LLM2[(Groq API)]
-        LLM3[(GitHub AI)]
+        LLM1[(Hugging Face API)]
+        LLM2[(Gemini API)]
+        LLM3[(Groq API)]
+        LLM4[(GitHub AI)]
     end
 
     T --> A
@@ -43,8 +44,9 @@ flowchart TD
     C -.->|생성| LLM1
     C -.->|생성| LLM2
     C -.->|생성| LLM3
-    D -.->|평가| LLM2
-    E -.->|정제| LLM2
+    C -.->|생성| LLM4
+    D -.->|평가| LLM1
+    E -.->|정제| LLM1
     F -.->|저장| N
     G -.->|알림| S
 ```
@@ -61,9 +63,11 @@ stateDiagram-v2
     
     state GenerateSubmissions {
         [*] --> ApplyStrategy
+        ApplyStrategy --> CallHuggingFace
         ApplyStrategy --> CallGemini
         ApplyStrategy --> CallGroq
         ApplyStrategy --> CallGitHubAI
+        CallHuggingFace --> ParseResponse
         CallGemini --> ParseResponse
         CallGroq --> ParseResponse
         CallGitHubAI --> ParseResponse
@@ -94,8 +98,9 @@ stateDiagram-v2
 
 ### 1. LLM 제공자 구성
 
-| 제공자 | 모델 | Rate Limit | 429 처리 |
-|--------|------|:----------:|:--------:|
+| 제공자 | 기본 모델 | Rate Limit | 429 처리 |
+|--------|-----------|:----------:|:--------:|
+| **Hugging Face** | `Qwen/Qwen3-235B-A22B-Instruct-2507` | 1초 | fallback 모델로 자동 전환 |
 | **Gemini** | `gemini-2.5-flash-lite` | 10초 | 재시도 없이 스킵 |
 | **Groq** | `openai/gpt-oss-120b` | 2초 | 자동 재시도 |
 | **GitHub AI** | `openai/gpt-4.1-mini` | 10초 | 재시도 없이 스킵 |
@@ -207,6 +212,10 @@ on:
   workflow_dispatch:
 
 env:
+  HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY }}
+  HF_NAMING_MODEL: Qwen/Qwen3-235B-A22B-Instruct-2507
+  HF_NAMING_FALLBACK_MODELS: deepseek-ai/DeepSeek-V3.1,moonshotai/Kimi-K2-Instruct-0905
+  HF_PROVIDER: auto
   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
   GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
   AI_GITHUB_TOKEN: ${{ secrets.AI_GITHUB_TOKEN }}  # GitHub AI

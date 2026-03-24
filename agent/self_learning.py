@@ -3,18 +3,14 @@
 LLM이 스스로 생성한 결과를 분석하고, 다음 생성에 반영하는 피드백 루프
 """
 
-import os
 import json
 import asyncio
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from collections import Counter
 
-from langchain_groq import ChatGroq
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
-
 from state import ContestInfo, Submission
+from llm_clients import create_primary_client, get_rate_limit_delay
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +26,7 @@ class SelfLearningEngine:
     """
     
     def __init__(self):
-        self.groq = ChatGroq(
-            model="openai/gpt-oss-120b",
-            api_key=os.getenv("GROQ_API_KEY"),
-            temperature=0.7,
-        )
+        self.client = create_primary_client(temperature=0.7, max_tokens=2048)
         
         # 학습된 패턴 저장
         self.learned_patterns: Dict[str, Any] = {
@@ -56,7 +48,7 @@ class SelfLearningEngine:
         
         # 점수순 정렬
         scored = [s for s in submissions if s.get('score') is not None]
-        if not scored:
+        if not scored or not self.client:
             return {}
         
         scored.sort(key=lambda x: x.get('score', 0), reverse=True)
@@ -71,6 +63,9 @@ class SelfLearningEngine:
             for s in top_submissions[:10]
         ])
         
+        system_prompt = """당신은 네이밍 패턴 분석가입니다.
+높은 점수를 받은 작명의 공통 패턴만 간결하게 추출하세요."""
+
         prompt = f"""다음은 공모전에서 높은 점수를 받은 작명들입니다:
 
 {top_text}
@@ -94,15 +89,15 @@ class SelfLearningEngine:
 ```"""
         
         try:
-            response = await self.groq.ainvoke([HumanMessage(content=prompt)])
+            response = await self.client.generate(system_prompt, prompt)
             
             # JSON 파싱
             import re
-            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
             if json_match:
                 analysis = json.loads(json_match.group(1))
             else:
-                analysis = json.loads(response.content.strip())
+                analysis = json.loads(response.strip())
             
             # 학습 결과 저장
             self.learned_patterns["successful_keywords"].extend(
@@ -114,7 +109,7 @@ class SelfLearningEngine:
             
             logger.info(f"✅ 패턴 분석 완료: {len(analysis.get('common_keywords', []))}개 키워드 발견")
             
-            await asyncio.sleep(2)  # Rate limit
+            await asyncio.sleep(get_rate_limit_delay(self.client.provider_name))
             
             return analysis
             
@@ -253,24 +248,24 @@ class SelfLearningEngine:
         iteration: int,
     ) -> List[Submission]:
         """개선된 프롬프트로 작명 생성"""
+        if not self.client:
+            logger.error("❌ 자기 학습용 LLM이 없습니다")
+            return []
         
         system_prompt = f"""당신은 대한민국 최고의 네이미스트입니다.
 당신은 {iteration}차 학습을 통해 더욱 발전한 상태입니다.
 이전 반복에서 배운 것을 적극 활용하세요."""
         
         try:
-            response = await self.groq.ainvoke([
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=prompt),
-            ])
+            response = await self.client.generate(system_prompt, prompt)
             
             # JSON 파싱
             import re
-            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
             if json_match:
                 items = json.loads(json_match.group(1))
             else:
-                items = json.loads(response.content.strip())
+                items = json.loads(response.strip())
             
             submissions = []
             for item in items:
@@ -278,8 +273,8 @@ class SelfLearningEngine:
                     name=item.get('submission', ''),
                     description=f"[{iteration}차 학습] {item.get('description', '')}",
                     strategy=f"Self-Learning-Iter{iteration}",
-                    provider="groq",
-                    model="openai/gpt-oss-120b",
+                    provider=self.client.provider_name,
+                    model=self.client.model_name,
                     score=None,
                     criteria_scores=None,
                 )
@@ -287,7 +282,7 @@ class SelfLearningEngine:
             
             logger.info(f"✅ {iteration}차 학습으로 {len(submissions)}개 작명 생성")
             
-            await asyncio.sleep(2)  # Rate limit
+            await asyncio.sleep(get_rate_limit_delay(self.client.provider_name))
             
             return submissions
             

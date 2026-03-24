@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 from collections import defaultdict
 
 from state import Submission
+from llm_clients import create_primary_client, get_rate_limit_delay
 
 logger = logging.getLogger(__name__)
 
@@ -118,13 +119,15 @@ async def refine_top_submissions(
     groq_client,
 ) -> List[Submission]:
     """TOP 작명들을 분석하고 개선된 버전 생성"""
-    from langchain_groq import ChatGroq
-    from langchain_core.messages import HumanMessage
-    import os
     import json
     import re
     
     logger.info(f"✨ TOP {len(top_submissions)}개 작명 정제 시작")
+    client = create_primary_client(temperature=0.8, max_tokens=2048)
+
+    if not client:
+        logger.error("❌ 정제용 LLM이 없습니다")
+        return []
     
     top_text = ""
     for i, sub in enumerate(top_submissions, 1):
@@ -156,19 +159,14 @@ async def refine_top_submissions(
 """
     
     try:
-        groq = ChatGroq(
-            model="llama-3.3-70b-versatile",
-            api_key=os.getenv("GROQ_API_KEY"),
-            temperature=0.8,
-        )
+        system_prompt = "당신은 대한민국 최고의 네이미스트입니다. 더 나은 후보를 만들 때는 한국어 감각과 수상 가능성을 동시에 고려하세요."
+        response = await client.generate(system_prompt, prompt)
         
-        response = await groq.ainvoke([HumanMessage(content=prompt)])
-        
-        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
+        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
         if json_match:
             refined = json.loads(json_match.group(1))
         else:
-            refined = json.loads(response.content.strip())
+            refined = json.loads(response.strip())
         
         refined_submissions = []
         for item in refined:
@@ -176,15 +174,15 @@ async def refine_top_submissions(
                 name=item['submission'],
                 description=f"[정제됨] {item['description']}",
                 strategy="Refined",
-                provider="groq",
-                model="llama-3.3-70b-versatile",
+                provider=client.provider_name,
+                model=client.model_name,
                 score=None,
                 criteria_scores=None,
             )
             refined_submissions.append(sub)
         
         logger.info(f"✅ {len(refined_submissions)}개 정제된 작명 생성됨")
-        await asyncio.sleep(3)
+        await asyncio.sleep(get_rate_limit_delay(client.provider_name))
         
         return refined_submissions
         
@@ -208,12 +206,6 @@ async def tournament_selection(
     Round 2: 전략 다양성 보장
     Round 3: 1:1 대결을 통한 최종 선정
     """
-    from langchain_groq import ChatGroq
-    from langchain_core.messages import HumanMessage
-    import os
-    import json
-    import re
-    
     logger.info(f"🏆 토너먼트 선정 시작 ({len(submissions)}개 → {final_count}개)")
     
     if len(submissions) <= final_count:
@@ -240,20 +232,16 @@ async def _run_head_to_head_tournament(
     final_count: int,
 ) -> List[Submission]:
     """1:1 대결을 통한 토너먼트"""
-    from langchain_groq import ChatGroq
-    from langchain_core.messages import HumanMessage
-    import os
     import json
     import re
     
     if len(submissions) <= final_count:
         return submissions
     
-    groq = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        api_key=os.getenv("GROQ_API_KEY"),
-        temperature=0.3,
-    )
+    client = create_primary_client(temperature=0.3, max_tokens=1024)
+    if not client:
+        logger.warning("토너먼트용 LLM이 없어 점수 기반 결과를 유지합니다")
+        return submissions[:final_count]
     
     # 상위 5개 vs 나머지에서 대결
     top = submissions[:final_count]
@@ -270,8 +258,10 @@ B: {challenger['name']}
 반드시 JSON으로 응답: {{"winner": "A" 또는 "B", "reason": "선택 이유"}}"""
         
         try:
-            response = await groq.ainvoke([HumanMessage(content=prompt)])
-            json_match = re.search(r'\{[\s\S]*\}', response.content)
+            system_prompt = f"""당신은 "{contest['title']}" 공모전의 최종 심사위원입니다.
+둘 중 실제 수상 가능성이 더 높은 후보만 선택하세요."""
+            response = await client.generate(system_prompt, prompt)
+            json_match = re.search(r'\{[\s\S]*\}', response)
             if json_match:
                 result = json.loads(json_match.group())
                 if result.get('winner') == 'B':
@@ -279,7 +269,7 @@ B: {challenger['name']}
                     top.append(challenger)
                     logger.info(f"   🔄 교체: '{weakest_top['name']}' → '{challenger['name']}'")
             
-            await asyncio.sleep(2)
+            await asyncio.sleep(get_rate_limit_delay(client.provider_name))
         except Exception as e:
             logger.error(f"대결 실패: {e}")
     
@@ -291,19 +281,14 @@ async def final_polish(
     top_submissions: List[Submission],
 ) -> List[Submission]:
     """최종 후보 폴리싱 - 1등 달성을 위한 마지막 다듬기"""
-    from langchain_groq import ChatGroq
-    from langchain_core.messages import HumanMessage
-    import os
     import json
     import re
     
     logger.info(f"💎 최종 폴리싱 시작 ({len(top_submissions)}개)")
-    
-    groq = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        api_key=os.getenv("GROQ_API_KEY"),
-        temperature=0.5,
-    )
+    client = create_primary_client(temperature=0.5, max_tokens=2048)
+    if not client:
+        logger.warning("폴리싱용 LLM이 없어 원본 후보를 그대로 사용합니다")
+        return top_submissions
     
     polished = []
     
@@ -332,12 +317,14 @@ async def final_polish(
 ```"""
         
         try:
-            response = await groq.ainvoke([HumanMessage(content=prompt)])
-            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
+            system_prompt = f"""당신은 "{contest['title']}" 공모전 심사위원입니다.
+수정은 최소화하되 제출용 설명은 바로 쓸 수 있을 정도로 다듬으세요."""
+            response = await client.generate(system_prompt, prompt)
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
             if json_match:
                 result = json.loads(json_match.group(1))
             else:
-                result = json.loads(response.content.strip())
+                result = json.loads(response.strip())
             
             if result.get('polished'):
                 polished_sub = Submission(
@@ -355,7 +342,7 @@ async def final_polish(
                 polished.append(sub)
                 logger.info(f"   ✅ '{sub['name']}' 유지")
             
-            await asyncio.sleep(2)
+            await asyncio.sleep(get_rate_limit_delay(client.provider_name))
             
         except Exception as e:
             logger.error(f"폴리싱 실패: {e}")

@@ -7,15 +7,20 @@ import os
 import json
 import asyncio
 import logging
-import httpx
-from typing import List, Dict, Optional, Tuple
-from statistics import mean, stdev
-
-from langchain_groq import ChatGroq
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
+from typing import List, Dict, Tuple
+from statistics import mean
 
 from state import ContestInfo, Submission
+from llm_clients import (
+    GitHubAIClient,
+    GeminiClient,
+    GroqClient,
+    HuggingFaceClient,
+    LLMClient,
+    create_primary_client,
+    get_huggingface_api_key,
+    get_rate_limit_delay,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,35 +38,55 @@ class MultiAgentEvaluator:
     """
     
     def __init__(self):
-        self.groq = ChatGroq(
-            model="openai/gpt-oss-120b",
-            api_key=os.getenv("GROQ_API_KEY"),
-            temperature=0.3,
-        )
-        
-        self.gemini = None
+        self.evaluators: List[Tuple[str, str, LLMClient]] = []
+
+        if get_huggingface_api_key():
+            self.evaluators.append((
+                "huggingface",
+                "균형감과 언어 완성도를 보는 오픈소스 LLM 심사위원",
+                HuggingFaceClient(temperature=0.2, max_tokens=2048),
+            ))
+
+        if os.getenv("GROQ_API_KEY"):
+            self.evaluators.append((
+                "groq",
+                "실전 수상 가능성과 적합성을 보는 심사위원",
+                GroqClient(model="openai/gpt-oss-120b", temperature=0.2),
+            ))
+
         if os.getenv("GEMINI_API_KEY"):
-            self.gemini = ChatGoogleGenerativeAI(
-                model="gemini-2.5-flash-lite",
-                google_api_key=os.getenv("GEMINI_API_KEY"),
-                temperature=0.3,
-            )
-        
-        self.github_token = os.getenv("AI_GITHUB_TOKEN")
-    
-    async def _evaluate_with_groq(
+            self.evaluators.append((
+                "gemini",
+                "창의성과 독창성을 특히 엄격하게 보는 심사위원",
+                GeminiClient(model="gemini-2.5-flash-lite", temperature=0.2),
+            ))
+
+        if os.getenv("AI_GITHUB_TOKEN"):
+            self.evaluators.append((
+                "github",
+                "기억용이성과 실용성을 특히 엄격하게 보는 심사위원",
+                GitHubAIClient(model="openai/gpt-4.1-mini", temperature=0.2),
+            ))
+
+    async def _evaluate_with_client(
         self, 
+        client: LLMClient,
+        perspective: str,
         contest: ContestInfo, 
         submissions: List[Submission],
         criteria: Dict[str, int],
     ) -> Dict[int, float]:
-        """Groq로 평가"""
+        """공통 클라이언트로 평가"""
         
         submissions_text = "\n".join([
             f"{i}. {s['name']}" for i, s in enumerate(submissions, 1)
         ])
         
-        prompt = f"""당신은 "{contest['title']}" 공모전의 엄격한 심사위원입니다.
+        system_prompt = f"""당신은 "{contest['title']}" 공모전의 심사위원입니다.
+{perspective}
+반드시 엄격하고 현실적으로 채점하세요."""
+
+        prompt = f"""다음 출품작들을 공정하게 평가하세요.
 
 <평가 기준>
 {json.dumps(criteria, ensure_ascii=False)}
@@ -77,127 +102,19 @@ class MultiAgentEvaluator:
 ```"""
         
         try:
-            response = await self.groq.ainvoke([HumanMessage(content=prompt)])
+            response = await client.generate(system_prompt, prompt)
             import re
-            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
             if json_match:
                 scores = json.loads(json_match.group(1))
             else:
-                scores = json.loads(response.content.strip())
+                scores = json.loads(response.strip())
             
-            await asyncio.sleep(2)
+            await asyncio.sleep(get_rate_limit_delay(client.provider_name))
             return {int(k): float(v) for k, v in scores.items()}
         except Exception as e:
-            logger.error(f"Groq 평가 실패: {e}")
+            logger.error("%s 평가 실패: %s", client.provider_name, e)
             return {}
-    
-    async def _evaluate_with_gemini(
-        self, 
-        contest: ContestInfo, 
-        submissions: List[Submission],
-        criteria: Dict[str, int],
-    ) -> Dict[int, float]:
-        """Gemini로 평가"""
-        
-        if not self.gemini:
-            return {}
-        
-        submissions_text = "\n".join([
-            f"{i}. {s['name']}" for i, s in enumerate(submissions, 1)
-        ])
-        
-        prompt = f"""당신은 "{contest['title']}" 공모전의 창의성 전문 심사위원입니다.
-창의성과 독창성에 특히 주목하세요.
-
-<평가 기준>
-{json.dumps(criteria, ensure_ascii=False)}
-</평가 기준>
-
-<출품작>
-{submissions_text}
-</출품작>
-
-각 출품작에 0~100점을 부여하세요. 반드시 JSON으로 응답:
-```json
-{{"1": 점수, "2": 점수, ...}}
-```"""
-        
-        try:
-            response = await self.gemini.ainvoke([HumanMessage(content=prompt)])
-            import re
-            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
-            if json_match:
-                scores = json.loads(json_match.group(1))
-            else:
-                scores = json.loads(response.content.strip())
-            
-            await asyncio.sleep(10)  # Gemini rate limit
-            return {int(k): float(v) for k, v in scores.items()}
-        except Exception as e:
-            logger.error(f"Gemini 평가 실패: {e}")
-            return {}
-    
-    async def _evaluate_with_github(
-        self, 
-        contest: ContestInfo, 
-        submissions: List[Submission],
-        criteria: Dict[str, int],
-    ) -> Dict[int, float]:
-        """GitHub AI로 평가"""
-        
-        if not self.github_token:
-            return {}
-        
-        submissions_text = "\n".join([
-            f"{i}. {s['name']}" for i, s in enumerate(submissions, 1)
-        ])
-        
-        prompt = f"""당신은 "{contest['title']}" 공모전의 실용성 전문 심사위원입니다.
-기억용이성과 실용성에 특히 주목하세요.
-
-<평가 기준>
-{json.dumps(criteria, ensure_ascii=False)}
-</평가 기준>
-
-<출품작>
-{submissions_text}
-</출품작>
-
-각 출품작에 0~100점을 부여하세요. 반드시 JSON으로 응답:
-{{"1": 점수, "2": 점수, ...}}"""
-        
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.github_token}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": "openai/gpt-4.1-mini",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
-            }
-            
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    "https://models.github.ai/inference/chat/completions",
-                    headers=headers,
-                    json=payload,
-                )
-                if response.status_code == 429:
-                    return {}
-                response.raise_for_status()
-                data = response.json()
-                content = data["choices"][0]["message"]["content"]
-                
-                import re
-                json_match = re.search(r'\{[\s\S]*\}', content)
-                if json_match:
-                    scores = json.loads(json_match.group())
-                    await asyncio.sleep(10)
-                    return {int(k): float(v) for k, v in scores.items()}
-        except Exception as e:
-            logger.error(f"GitHub AI 평가 실패: {e}")
-        return {}
     
     async def cross_evaluate(
         self,
@@ -209,28 +126,31 @@ class MultiAgentEvaluator:
         
         logger.info(f"🔄 Multi-Agent 교차 평가 시작 ({len(submissions)}개)")
         
-        # 병렬 평가 (순차 실행으로 변경 - rate limit)
-        groq_scores = await self._evaluate_with_groq(contest, submissions, criteria)
-        gemini_scores = await self._evaluate_with_gemini(contest, submissions, criteria)
-        github_scores = await self._evaluate_with_github(contest, submissions, criteria)
-        
-        # 점수 합산
-        active_evaluators = sum([
-            bool(groq_scores), 
-            bool(gemini_scores), 
-            bool(github_scores)
-        ])
+        evaluator_scores: Dict[str, Dict[int, float]] = {}
+
+        for provider_name, perspective, client in self.evaluators:
+            scores = await self._evaluate_with_client(
+                client=client,
+                perspective=perspective,
+                contest=contest,
+                submissions=submissions,
+                criteria=criteria,
+            )
+            if scores:
+                evaluator_scores[provider_name] = scores
+
+        active_evaluators = len(evaluator_scores)
         
         logger.info(f"📊 {active_evaluators}개 LLM 평가 완료")
         
         for i, sub in enumerate(submissions, 1):
             scores = []
-            if i in groq_scores:
-                scores.append(groq_scores[i])
-            if i in gemini_scores:
-                scores.append(gemini_scores[i])
-            if i in github_scores:
-                scores.append(github_scores[i])
+            active_names = []
+
+            for provider_name, provider_scores in evaluator_scores.items():
+                if i in provider_scores:
+                    scores.append(provider_scores[i])
+                    active_names.append(provider_name)
             
             if scores:
                 # 가중 평균 (편차가 큰 경우 중앙값 사용)
@@ -241,6 +161,7 @@ class MultiAgentEvaluator:
                     
                 sub['criteria_scores'] = {
                     "multi_agent_scores": scores,
+                    "evaluators": active_names,
                     "evaluator_count": len(scores),
                 }
             else:
@@ -255,10 +176,16 @@ class MultiAgentEvaluator:
         submission: Submission,
     ) -> Tuple[float, str]:
         """자기 비판을 통한 품질 검증"""
-        
-        prompt = f"""당신은 "{contest['title']}" 공모전의 최종 심사위원입니다.
 
-다음 작명에 대해 비판적으로 평가하세요:
+        critic = create_primary_client(temperature=0.2, max_tokens=1024)
+        if not critic:
+            return (0, "")
+        
+        system_prompt = f"""당신은 "{contest['title']}" 공모전의 최종 심사위원입니다.
+약점과 탈락 리스크를 숨기지 말고 냉정하게 지적하세요."""
+
+        prompt = f"""다음 작명에 대해 비판적으로 평가하세요:
+
 - 작명: {submission['name']}
 - 설명: {submission['description']}
 
@@ -282,15 +209,15 @@ class MultiAgentEvaluator:
 ```"""
         
         try:
-            response = await self.groq.ainvoke([HumanMessage(content=prompt)])
+            response = await critic.generate(system_prompt, prompt)
             import re
-            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
             if json_match:
                 critique = json.loads(json_match.group(1))
             else:
-                critique = json.loads(response.content.strip())
+                critique = json.loads(response.strip())
             
-            await asyncio.sleep(2)
+            await asyncio.sleep(get_rate_limit_delay(critic.provider_name))
             
             return (
                 critique.get('final_score', 0),
@@ -308,19 +235,25 @@ class MultiAgentEvaluator:
 async def generate_evaluation_criteria(
     contest: ContestInfo,
 ) -> Dict[str, int]:
-    """공모전 평가 기준 자동 생성 (Groq 사용)"""
+    """공모전 평가 기준 자동 생성"""
     
     logger.info(f"📊 평가 기준 생성: {contest['title']}")
-    
-    groq = ChatGroq(
-        model="openai/gpt-oss-120b",
-        api_key=os.getenv("GROQ_API_KEY"),
-        temperature=0.5,
-    )
-    
-    prompt = f"""당신은 "{contest['title']}" 공모전의 심사위원입니다.
 
-<공모전 내용>
+    client = create_primary_client(temperature=0.5, max_tokens=1024)
+    if not client:
+        logger.warning("사용 가능한 평가용 LLM이 없어 기본 평가 기준을 사용합니다")
+        return {
+            "창의성": 25,
+            "적합성": 25,
+            "기억용이성": 25,
+            "완성도": 25,
+        }
+    
+    system_prompt = f"""당신은 "{contest['title']}" 공모전의 심사위원입니다.
+공모전 설명에 맞는 실제 심사 기준을 설계하세요."""
+
+    prompt = f"""<공모전 내용>
+
 {contest['content'][:1500]}
 </공모전 내용>
 
@@ -339,22 +272,21 @@ async def generate_evaluation_criteria(
 """
     
     try:
-        messages = [HumanMessage(content=prompt)]
-        response = await groq.ainvoke(messages)
+        response = await client.generate(system_prompt, prompt)
         
         import re
-        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
+        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
         if json_match:
             criteria = json.loads(json_match.group(1))
         else:
-            criteria = json.loads(response.content.strip())
+            criteria = json.loads(response.strip())
         
         total = sum(criteria.values())
         if total != 100:
             logger.warning(f"평가 기준 총합 {total}점")
         
         logger.info(f"✅ 평가 기준 생성 완료: {criteria}")
-        await asyncio.sleep(2)
+        await asyncio.sleep(get_rate_limit_delay(client.provider_name))
         
         return criteria
         
@@ -385,20 +317,23 @@ async def evaluate_submissions(
     
     # 기존 단일 LLM 평가 (fallback)
     logger.info(f"🎯 {len(submissions)}개 작명 평가 시작 (단일 LLM)")
-    
-    groq = ChatGroq(
-        model="openai/gpt-oss-120b",
-        api_key=os.getenv("GROQ_API_KEY"),
-        temperature=0.3,
-    )
+
+    client = create_primary_client(temperature=0.2, max_tokens=2048)
+    if not client:
+        logger.error("평가에 사용할 LLM이 없습니다")
+        for sub in submissions:
+            sub['score'] = 0
+        return submissions
     
     submissions_text = ""
     for i, sub in enumerate(submissions, 1):
         submissions_text += f"{i}. {sub['name']}\n   설명: {sub['description']}\n\n"
     
-    prompt = f"""당신은 "{contest['title']}" 공모전의 심사위원입니다.
+    system_prompt = f"""당신은 "{contest['title']}" 공모전의 심사위원입니다.
+평가 기준에 맞춰 공정하게 점수를 부여하세요."""
 
-<평가 기준>
+    prompt = f"""<평가 기준>
+
 {json.dumps(criteria, ensure_ascii=False, indent=2)}
 </평가 기준>
 
@@ -412,14 +347,14 @@ async def evaluate_submissions(
 ```"""
     
     try:
-        response = await groq.ainvoke([HumanMessage(content=prompt)])
+        response = await client.generate(system_prompt, prompt)
         
         import re
-        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response.content)
+        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
         if json_match:
             evaluations = json.loads(json_match.group(1))
         else:
-            evaluations = json.loads(response.content.strip())
+            evaluations = json.loads(response.strip())
         
         eval_map = {e['index']: e for e in evaluations}
         
@@ -429,7 +364,7 @@ async def evaluate_submissions(
                 sub['criteria_scores'] = eval_map[i].get('scores', {})
         
         logger.info(f"✅ 평가 완료")
-        await asyncio.sleep(2)
+        await asyncio.sleep(get_rate_limit_delay(client.provider_name))
         
         return submissions
         

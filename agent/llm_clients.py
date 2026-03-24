@@ -1,0 +1,330 @@
+"""
+Shared LLM client utilities for the agent pipeline.
+"""
+
+import os
+import logging
+from abc import ABC, abstractmethod
+from typing import List, Optional
+
+import httpx
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
+
+logger = logging.getLogger(__name__)
+
+HF_DEFAULT_PRIMARY_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507"
+HF_DEFAULT_FALLBACK_MODELS = [
+    "deepseek-ai/DeepSeek-V3.1",
+    "moonshotai/Kimi-K2-Instruct-0905",
+]
+
+
+def _parse_csv_env(value: Optional[str]) -> List[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def get_huggingface_api_key() -> Optional[str]:
+    return os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
+
+
+def get_huggingface_primary_model() -> str:
+    return os.getenv("HF_NAMING_MODEL", HF_DEFAULT_PRIMARY_MODEL).strip()
+
+
+def get_huggingface_fallback_models() -> List[str]:
+    configured = _parse_csv_env(os.getenv("HF_NAMING_FALLBACK_MODELS"))
+    return configured or HF_DEFAULT_FALLBACK_MODELS.copy()
+
+
+def get_huggingface_provider() -> str:
+    return os.getenv("HF_PROVIDER", "auto").strip() or "auto"
+
+
+def get_configured_provider_names() -> List[str]:
+    providers = []
+
+    if get_huggingface_api_key():
+        providers.append("huggingface")
+    if os.getenv("GROQ_API_KEY"):
+        providers.append("groq")
+    if os.getenv("GEMINI_API_KEY"):
+        providers.append("gemini")
+    if os.getenv("AI_GITHUB_TOKEN"):
+        providers.append("github")
+
+    return providers
+
+
+def get_rate_limit_delay(provider_name: str) -> int:
+    return {
+        "gemini": 10,
+        "groq": 2,
+        "github": 10,
+        "huggingface": 1,
+    }.get(provider_name, 1)
+
+
+class LLMClient(ABC):
+    """Shared async chat interface."""
+
+    @property
+    @abstractmethod
+    def provider_name(self) -> str:
+        pass
+
+    @property
+    @abstractmethod
+    def model_name(self) -> str:
+        pass
+
+    @abstractmethod
+    async def generate(self, system_prompt: str, user_prompt: str) -> str:
+        pass
+
+
+class GeminiClient(LLMClient):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash-lite", temperature: float = 0.9):
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self._model_name = model
+        self.client = ChatGoogleGenerativeAI(
+            model=model,
+            google_api_key=self.api_key,
+            temperature=temperature,
+        )
+
+    @property
+    def provider_name(self) -> str:
+        return "gemini"
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    async def generate(self, system_prompt: str, user_prompt: str) -> str:
+        try:
+            response = await self.client.ainvoke(
+                [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt),
+                ]
+            )
+            return response.content
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                raise Exception("Rate limit exceeded (429) - skipping")
+            raise
+
+
+class GroqClient(LLMClient):
+    def __init__(self, api_key: Optional[str] = None, model: str = "openai/gpt-oss-120b", temperature: float = 0.9):
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
+        self._model_name = model
+        self.client = ChatGroq(
+            model=model,
+            api_key=self.api_key,
+            temperature=temperature,
+        )
+
+    @property
+    def provider_name(self) -> str:
+        return "groq"
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    async def generate(self, system_prompt: str, user_prompt: str) -> str:
+        response = await self.client.ainvoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+        )
+        return response.content
+
+
+class GitHubAIClient(LLMClient):
+    def __init__(self, api_key: Optional[str] = None, model: str = "openai/gpt-4.1-mini", temperature: float = 0.9):
+        self.api_key = api_key or os.getenv("AI_GITHUB_TOKEN")
+        self._model_name = model
+        self.temperature = temperature
+        self.endpoint = "https://models.github.ai/inference/chat/completions"
+
+    @property
+    def provider_name(self) -> str:
+        return "github"
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    async def generate(self, system_prompt: str, user_prompt: str) -> str:
+        payload = {
+            "model": self._model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": self.temperature,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(self.endpoint, headers=headers, json=payload)
+            if response.status_code == 429:
+                raise Exception("Rate limit exceeded (429) - skipping")
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+
+
+class HuggingFaceClient(LLMClient):
+    """OpenAI-compatible Hugging Face router client with model fallback."""
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        fallback_models: Optional[List[str]] = None,
+        provider: Optional[str] = None,
+        temperature: float = 0.8,
+        max_tokens: int = 2048,
+    ):
+        self.api_key = api_key or get_huggingface_api_key()
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.provider = provider or get_huggingface_provider()
+        primary_model = model or get_huggingface_primary_model()
+        fallbacks = fallback_models or get_huggingface_fallback_models()
+
+        unique_candidates: List[str] = []
+        for candidate in [primary_model, *fallbacks]:
+            if candidate and candidate not in unique_candidates:
+                unique_candidates.append(candidate)
+
+        self.model_candidates = unique_candidates
+        self._model_name = unique_candidates[0]
+        self.endpoint = "https://router.huggingface.co/v1/chat/completions"
+
+    @property
+    def provider_name(self) -> str:
+        return "huggingface"
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    def _compose_model_name(self, model_name: str) -> str:
+        if self.provider in ("", "auto", None):
+            return model_name
+        if ":" in model_name:
+            return model_name
+        return f"{model_name}:{self.provider}"
+
+    async def generate(self, system_prompt: str, user_prompt: str) -> str:
+        if not self.api_key:
+            raise ValueError("HUGGINGFACE_API_KEY 또는 HF_TOKEN이 필요합니다")
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        last_error: Optional[Exception] = None
+
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            for candidate in self.model_candidates:
+                payload = {
+                    "model": self._compose_model_name(candidate),
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": self.temperature,
+                    "max_tokens": self.max_tokens,
+                }
+
+                try:
+                    response = await client.post(self.endpoint, headers=headers, json=payload)
+
+                    if response.status_code in (401, 403):
+                        response.raise_for_status()
+
+                    if response.status_code in (429, 500, 502, 503, 504):
+                        raise httpx.HTTPStatusError(
+                            f"Hugging Face temporary error ({response.status_code})",
+                            request=response.request,
+                            response=response,
+                        )
+
+                    response.raise_for_status()
+                    data = response.json()
+                    self._model_name = candidate
+                    return data["choices"][0]["message"]["content"]
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        "Hugging Face model failed, trying next candidate: %s (%s)",
+                        candidate,
+                        e,
+                    )
+
+        raise last_error or RuntimeError("Hugging Face generation failed")
+
+
+def create_generation_clients() -> List[LLMClient]:
+    clients: List[LLMClient] = []
+
+    if get_huggingface_api_key():
+        try:
+            clients.append(HuggingFaceClient())
+            logger.info("✅ Hugging Face 클라이언트 초기화 성공 (%s)", get_huggingface_primary_model())
+        except Exception as e:
+            logger.error("❌ Hugging Face 클라이언트 초기화 실패: %s", e)
+
+    if os.getenv("GEMINI_API_KEY"):
+        try:
+            clients.append(GeminiClient())
+            logger.info("✅ Gemini 클라이언트 초기화 성공")
+        except Exception as e:
+            logger.error("❌ Gemini 클라이언트 초기화 실패: %s", e)
+
+    if os.getenv("GROQ_API_KEY"):
+        for model in ("openai/gpt-oss-120b", "llama-3.3-70b-versatile"):
+            try:
+                clients.append(GroqClient(model=model))
+                logger.info("✅ Groq 클라이언트 초기화 성공 (%s)", model)
+            except Exception as e:
+                logger.error("❌ Groq 클라이언트 초기화 실패 (%s): %s", model, e)
+
+    if os.getenv("AI_GITHUB_TOKEN"):
+        try:
+            clients.append(GitHubAIClient(model="openai/gpt-4.1-mini"))
+            logger.info("✅ GitHub AI 클라이언트 초기화 성공 (gpt-4.1-mini)")
+        except Exception as e:
+            logger.error("❌ GitHub AI 클라이언트 초기화 실패: %s", e)
+
+    return clients
+
+
+def create_primary_client(temperature: float = 0.3, max_tokens: int = 2048) -> Optional[LLMClient]:
+    if get_huggingface_api_key():
+        return HuggingFaceClient(temperature=temperature, max_tokens=max_tokens)
+
+    if os.getenv("GROQ_API_KEY"):
+        return GroqClient(model="openai/gpt-oss-120b", temperature=temperature)
+
+    if os.getenv("GEMINI_API_KEY"):
+        return GeminiClient(model="gemini-2.5-flash-lite", temperature=temperature)
+
+    if os.getenv("AI_GITHUB_TOKEN"):
+        return GitHubAIClient(model="openai/gpt-4.1-mini", temperature=temperature)
+
+    return None

@@ -21,6 +21,7 @@ from llm_generator import generate_submissions, CREATIVE_STRATEGIES
 from evaluator import generate_evaluation_criteria, evaluate_submissions, rank_submissions, get_top_n
 from slack_notifier import send_slack_notification
 from notion_saver import save_to_notion, get_processed_urls
+from llm_clients import get_configured_provider_names
 
 # 환경변수 로드 (agent 디렉토리 기준으로 루트의 .env 찾기)
 env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
@@ -42,13 +43,18 @@ class NamingAgent:
     
     def __init__(self):
         """Agent 초기화"""
-        # 필수 환경변수 확인
-        required_vars = ["GEMINI_API_KEY", "GROQ_API_KEY", "SLACK_WEBHOOK"]
-        missing = [var for var in required_vars if not os.getenv(var)]
-        if missing:
-            raise ValueError(f"필수 환경변수 누락: {missing}")
+        if not os.getenv("SLACK_WEBHOOK"):
+            raise ValueError("필수 환경변수 누락: ['SLACK_WEBHOOK']")
+
+        configured_providers = get_configured_provider_names()
+        if not configured_providers:
+            raise ValueError(
+                "사용 가능한 LLM API 키가 없습니다. "
+                "HUGGINGFACE_API_KEY(HF_TOKEN), GROQ_API_KEY, GEMINI_API_KEY, AI_GITHUB_TOKEN 중 하나 이상이 필요합니다."
+            )
         
         logger.info("🚀 Fast-Naming AI Agent 초기화 완료")
+        logger.info("🤖 사용 가능한 LLM 제공자: %s", ", ".join(configured_providers))
     
     async def run(self) -> Dict[str, Any]:
         """Agent 실행"""
@@ -316,4 +322,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

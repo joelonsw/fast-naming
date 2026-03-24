@@ -26,7 +26,7 @@ Wevity 공모전 사이트를 자동으로 스크래핑하여 **1등 수상**을
 ### ✨ 핵심 기능
 
 - **12가지 창의적 전략** (한국어 특화 + 1등 달성용 4가지 추가)
-- **Multi-Agent 평가** (3개 LLM 교차 평가)
+- **Multi-Agent 평가** (Hugging Face 포함 다중 LLM 교차 평가)
 - **재귀적 자기 학습** (Self-Learning Engine)
 - **Tournament 선별** + 최종 폴리싱
 - **Chain-of-Thought** 프롬프트
@@ -36,7 +36,7 @@ Wevity 공모전 사이트를 자동으로 스크래핑하여 **1등 수상**을
 ```mermaid
 flowchart LR
     subgraph Phase1[생성]
-        A[스크래핑] --> B[12 전략 × 3 LLM]
+        A[스크래핑] --> B[12 전략 × 다중 LLM]
     end
     
     subgraph Phase2[자기학습]
@@ -57,11 +57,12 @@ flowchart LR
 
 ### 📊 LLM 구성
 
-| 제공자 | 모델 | Rate Limit | 용도 |
-|--------|------|:----------:|------|
-| **Gemini** | gemini-2.5-flash-lite | 10초 | 작명 생성 / 평가 |
-| **Groq** | openai/gpt-oss-120b | 2초 | 작명 생성 / 평가 / 자기학습 |
-| **GitHub AI** | openai/gpt-4.1-mini | 10초 | 작명 생성 / 평가 |
+| 제공자 | 기본 모델 | Rate Limit | 용도 |
+|--------|-----------|:----------:|------|
+| **Hugging Face** | `Qwen/Qwen3-235B-A22B-Instruct-2507` | 1초 | 작명 생성 / 평가 / 자기학습 / 정제 |
+| **Gemini** | `gemini-2.5-flash-lite` | 10초 | 보조 생성 / 평가 |
+| **Groq** | `openai/gpt-oss-120b` | 2초 | 보조 생성 / 평가 |
+| **GitHub AI** | `openai/gpt-4.1-mini` | 10초 | 보조 생성 / 평가 |
 
 ### 📂 Agent 파일 구조
 
@@ -86,6 +87,12 @@ agent/
 
 ```env
 # LLM API Keys
+HUGGINGFACE_API_KEY=hf_xxx
+# 또는 HF_TOKEN=hf_xxx
+HF_NAMING_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
+HF_NAMING_FALLBACK_MODELS=deepseek-ai/DeepSeek-V3.1,moonshotai/Kimi-K2-Instruct-0905
+HF_PROVIDER=auto
+
 GEMINI_API_KEY=xxx
 GROQ_API_KEY=xxx
 AI_GITHUB_TOKEN=xxx
