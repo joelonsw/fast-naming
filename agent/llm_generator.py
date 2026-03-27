@@ -4,12 +4,12 @@ LLM 클라이언트 및 작명 생성 모듈
 """
 
 import json
-import random
 import logging
 from typing import List, Dict, Any
 
 from state import ContestInfo, Submission
 from llm_clients import create_generation_clients, get_rate_limit_delay
+from contest_intelligence import build_contest_profile, build_example_insights, prioritize_strategies
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ CONTEST_TYPE_PROMPTS = {
 # 프롬프트 생성
 # ============================================================
 
-def create_system_prompt(contest: ContestInfo) -> str:
+def create_system_prompt(contest: ContestInfo, contest_profile: Dict[str, Any]) -> str:
     """Chain-of-Thought 시스템 프롬프트 생성"""
     return f'''당신은 대한민국 최고의 네이미스트이며, 수많은 공모전에서 1등을 수상한 경험이 있습니다.
 당신은 주최측이 원하는 {contest["contest_type"]}을 무조건 제공하는 네이미스트입니다.
@@ -187,18 +187,22 @@ def create_system_prompt(contest: ContestInfo) -> str:
 4. 역대 수상작의 공통 패턴을 참고하세요.
 5. 위 분석을 바탕으로 최적의 작명 3개를 도출하세요.
 
+추가로 아래 공모전 인텔리전스를 반드시 반영하세요.
+{contest_profile.get("prompt_boost", "")}
+
 반드시 JSON 형식으로만 응답해야 합니다.'''
 
 
 def create_user_prompt(
     contest: ContestInfo, 
     examples: List[Dict[str, str]], 
-    strategy: Dict[str, Any]
+    strategy: Dict[str, Any],
+    contest_profile: Dict[str, Any],
 ) -> str:
     """사용자 프롬프트 생성"""
-    
-    # 예시 선택 (최대 2개)
-    selected_examples = random.sample(examples, min(2, len(examples))) if examples else []
+
+    selected_examples = examples[:3] if examples else []
+    example_insights = build_example_insights(selected_examples)
     
     # 공모전 유형 명시적 지시
     contest_type = contest['contest_type']
@@ -231,6 +235,7 @@ def create_user_prompt(
     
     # 전략 주입
     prompt += strategy["prompt_injection"] + "\n\n"
+    prompt += contest_profile.get("prompt_boost", "") + "\n"
     
     prompt += f"<contest_description>\n{contest['content'][:2000]}\n</contest_description>\n\n"
     
@@ -240,6 +245,7 @@ def create_user_prompt(
             prompt += f"<sample_input{i}>\n{example.get('contestTitle', '')}\n</sample_input{i}>\n"
             prompt += f"<ideal_output{i}>\n{example.get('contestWinner', '')}\n</ideal_output{i}>\n"
             prompt += f"<strength{i}>\n{example.get('strength', '')}\n</strength{i}>\n\n"
+        prompt += example_insights + "\n"
     
     prompt += f"""guidelines:
 1. 공모전 요구사항을 모두 준수해야 합니다.
@@ -325,6 +331,8 @@ async def generate_submissions(
     import asyncio
     
     strategies = strategies or CREATIVE_STRATEGIES
+    strategies = prioritize_strategies(strategies, contest)
+    contest_profile = build_contest_profile(contest)
     clients = create_generation_clients()
     
     if not clients:
@@ -332,14 +340,21 @@ async def generate_submissions(
         return []
     
     all_submissions: List[Submission] = []
-    system_prompt = create_system_prompt(contest)
+    system_prompt = create_system_prompt(contest, contest_profile)
+
+    logger.info(
+        "🧭 공모전 인텔리전스 | 키워드=%s | 분야=%s | 추천전략=%s",
+        ", ".join(contest_profile.get("keywords", [])[:6]) or "없음",
+        ", ".join(contest_profile.get("domain_tags", [])) or "일반",
+        ", ".join(contest_profile.get("recommended_strategies", [])[:5]) or "기본",
+    )
     
     for strategy in strategies:
         for client in clients:
             try:
                 logger.info(f"🔄 {client.provider_name}/{client.model_name} - 전략: {strategy['name']}")
                 
-                user_prompt = create_user_prompt(contest, examples, strategy)
+                user_prompt = create_user_prompt(contest, examples, strategy, contest_profile)
                 response = await client.generate(system_prompt, user_prompt)
                 
                 parsed = parse_llm_response(response)

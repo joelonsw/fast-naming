@@ -11,6 +11,7 @@ from typing import List, Dict, Tuple
 from statistics import mean
 
 from state import ContestInfo, Submission
+from contest_intelligence import assess_submission_fit, build_contest_profile
 from llm_clients import (
     GitHubAIClient,
     GeminiClient,
@@ -68,6 +69,11 @@ class MultiAgentEvaluator:
                 GitHubAIClient(model="openai/gpt-4.1-mini", temperature=0.2),
             ))
 
+        logger.info(
+            "🧪 Multi-Agent evaluators: %s",
+            ", ".join(f"{name}/{client.model_name}" for name, _, client in self.evaluators) or "없음",
+        )
+
     async def _evaluate_with_client(
         self, 
         client: LLMClient,
@@ -81,9 +87,11 @@ class MultiAgentEvaluator:
         submissions_text = "\n".join([
             f"{i}. {s['name']}" for i, s in enumerate(submissions, 1)
         ])
+        contest_profile = build_contest_profile(contest)
         
         system_prompt = f"""당신은 "{contest['title']}" 공모전의 심사위원입니다.
 {perspective}
+{contest_profile.get("prompt_boost", "")}
 반드시 엄격하고 현실적으로 채점하세요."""
 
         prompt = f"""다음 출품작들을 공정하게 평가하세요.
@@ -169,6 +177,29 @@ class MultiAgentEvaluator:
                 sub['criteria_scores'] = {}
         
         return submissions
+
+
+def apply_fit_adjustments(
+    contest: ContestInfo,
+    submissions: List[Submission],
+) -> List[Submission]:
+    for sub in submissions:
+        if sub.get("score") is None:
+            continue
+
+        fit = assess_submission_fit(contest, sub)
+        original_score = sub.get("score", 0) or 0
+        adjusted_score = max(0.0, min(100.0, original_score + fit["adjustment"]))
+        sub["score"] = adjusted_score
+
+        criteria_scores = sub.get("criteria_scores") or {}
+        criteria_scores["fit_adjustment"] = fit["adjustment"]
+        criteria_scores["fit_reasons"] = fit["reasons"]
+        criteria_scores["fit_keyword_hits"] = fit["keyword_hits"]
+        criteria_scores["fit_domain_hits"] = fit["domain_hits"]
+        sub["criteria_scores"] = criteria_scores
+
+    return submissions
     
     async def self_critique(
         self,
@@ -248,8 +279,11 @@ async def generate_evaluation_criteria(
             "기억용이성": 25,
             "완성도": 25,
         }
+
+    logger.info("🧪 평가 기준 생성 모델: %s/%s", client.provider_name, client.model_name)
     
     system_prompt = f"""당신은 "{contest['title']}" 공모전의 심사위원입니다.
+{build_contest_profile(contest).get("prompt_boost", "")}
 공모전 설명에 맞는 실제 심사 기준을 설계하세요."""
 
     prompt = f"""<공모전 내용>
@@ -313,7 +347,8 @@ async def evaluate_submissions(
     
     if use_multi_agent:
         evaluator = MultiAgentEvaluator()
-        return await evaluator.cross_evaluate(contest, submissions, criteria)
+        evaluated = await evaluator.cross_evaluate(contest, submissions, criteria)
+        return apply_fit_adjustments(contest, evaluated)
     
     # 기존 단일 LLM 평가 (fallback)
     logger.info(f"🎯 {len(submissions)}개 작명 평가 시작 (단일 LLM)")
@@ -324,12 +359,15 @@ async def evaluate_submissions(
         for sub in submissions:
             sub['score'] = 0
         return submissions
+
+    logger.info("🧪 단일 평가 모델: %s/%s", client.provider_name, client.model_name)
     
     submissions_text = ""
     for i, sub in enumerate(submissions, 1):
         submissions_text += f"{i}. {sub['name']}\n   설명: {sub['description']}\n\n"
     
     system_prompt = f"""당신은 "{contest['title']}" 공모전의 심사위원입니다.
+{build_contest_profile(contest).get("prompt_boost", "")}
 평가 기준에 맞춰 공정하게 점수를 부여하세요."""
 
     prompt = f"""<평가 기준>
@@ -365,8 +403,8 @@ async def evaluate_submissions(
         
         logger.info(f"✅ 평가 완료")
         await asyncio.sleep(get_rate_limit_delay(client.provider_name))
-        
-        return submissions
+
+        return apply_fit_adjustments(contest, submissions)
         
     except Exception as e:
         logger.error(f"❌ 평가 실패: {e}")

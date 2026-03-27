@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 from collections import Counter
 
 from state import ContestInfo, Submission
+from contest_intelligence import build_contest_profile
 from llm_clients import create_primary_client, get_rate_limit_delay
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,8 @@ class SelfLearningEngine:
     
     def __init__(self):
         self.client = create_primary_client(temperature=0.7, max_tokens=2048)
+        if self.client:
+            logger.info("🧠 Self-Learning 모델: %s/%s", self.client.provider_name, self.client.model_name)
         
         # 학습된 패턴 저장
         self.learned_patterns: Dict[str, Any] = {
@@ -132,6 +135,7 @@ class SelfLearningEngine:
 </공모전 내용>
 
 """
+        base_prompt += build_contest_profile(contest).get("prompt_boost", "") + "\n"
         
         # 학습된 패턴 주입
         if analysis:
@@ -254,7 +258,8 @@ class SelfLearningEngine:
         
         system_prompt = f"""당신은 대한민국 최고의 네이미스트입니다.
 당신은 {iteration}차 학습을 통해 더욱 발전한 상태입니다.
-이전 반복에서 배운 것을 적극 활용하세요."""
+이전 반복에서 배운 것을 적극 활용하세요.
+{build_contest_profile(contest).get("prompt_boost", "")}"""
         
         try:
             response = await self.client.generate(system_prompt, prompt)

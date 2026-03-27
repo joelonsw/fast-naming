@@ -22,6 +22,7 @@ from evaluator import generate_evaluation_criteria, evaluate_submissions, rank_s
 from slack_notifier import send_slack_notification
 from notion_saver import save_to_notion, get_processed_urls
 from llm_clients import get_configured_provider_names
+from contest_intelligence import build_contest_profile
 
 # 환경변수 로드 (agent 디렉토리 기준으로 루트의 .env 찾기)
 env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
@@ -129,15 +130,37 @@ class NamingAgent:
             "top3": [],
             "slack_sent": False,
             "notion_saved": False,
+            "contest_profile": {},
+            "phase_models": {},
         }
         
         # === Phase 1: 초기 생성 ===
         logger.info("   📚 Few-shot 예시 로드...")
+        contest_profile = build_contest_profile(contest)
+        result["contest_profile"] = {
+            "keywords": contest_profile.get("keywords", []),
+            "domain_tags": contest_profile.get("domain_tags", []),
+            "preferred_traits": contest_profile.get("preferred_traits", []),
+            "organizer_profile": contest_profile.get("organizer_profile", {}),
+        }
+        logger.info(
+            "   🧭 공모전 프로필 | 키워드=%s | 분야=%s",
+            ", ".join(contest_profile.get("keywords", [])[:6]) or "없음",
+            ", ".join(contest_profile.get("domain_tags", [])) or "일반",
+        )
         examples = get_examples_for_contest(
             contest["contest_type"],
-            contest["held_by_type"]
+            contest["held_by_type"],
+            contest_title=contest["title"],
+            contest_content=contest["content"],
+            held_by=contest["held_by"],
         )
         logger.info(f"   → {len(examples)}개 예시 로드됨")
+        if examples:
+            logger.info(
+                "   📚 참고 수상작 예시: %s",
+                " | ".join(ex.get("contestTitle", "") for ex in examples[:3]),
+            )
         
         logger.info("   🤖 작명 생성 중 (12가지 전략 × 3 LLM)...")
         submissions = await generate_submissions(
@@ -216,14 +239,30 @@ class NamingAgent:
         # 최종 TOP 3 선정
         top3 = get_top_n(polished, 3)
         result["top3"] = [
-            {"name": s["name"], "score": s.get("score", 0)}
+            {
+                "name": s["name"],
+                "score": s.get("score", 0),
+                "provider": s.get("provider", ""),
+                "model": s.get("model", ""),
+                "strategy": s.get("strategy", ""),
+            }
             for s in top3
         ]
         
         logger.info("   🏆 최종 TOP 3:")
         for i, sub in enumerate(top3, 1):
             score = sub.get("score", 0) or 0
-            logger.info(f"      {i}. {sub['name']} (점수: {score:.1f})")
+            logger.info(
+                f"      {i}. {sub['name']} (점수: {score:.1f}, 모델: {sub.get('provider', '')}/{sub.get('model', '')}, 전략: {sub.get('strategy', '')})"
+            )
+
+        phase_models = {
+            "top3": [
+                f"{sub.get('provider', '')}/{sub.get('model', '')}"
+                for sub in top3
+            ],
+        }
+        result["phase_models"] = phase_models
         
         # === Phase 7: 저장 및 알림 ===
         notion_url = None

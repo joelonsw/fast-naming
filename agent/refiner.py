@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 from collections import defaultdict
 
 from state import Submission
+from contest_intelligence import build_contest_profile
 from llm_clients import create_primary_client, get_rate_limit_delay
 
 logger = logging.getLogger(__name__)
@@ -124,10 +125,12 @@ async def refine_top_submissions(
     
     logger.info(f"✨ TOP {len(top_submissions)}개 작명 정제 시작")
     client = create_primary_client(temperature=0.8, max_tokens=2048)
+    contest_profile = build_contest_profile(contest)
 
     if not client:
         logger.error("❌ 정제용 LLM이 없습니다")
         return []
+    logger.info("🛠️ 정제 모델: %s/%s", client.provider_name, client.model_name)
     
     top_text = ""
     for i, sub in enumerate(top_submissions, 1):
@@ -159,7 +162,8 @@ async def refine_top_submissions(
 """
     
     try:
-        system_prompt = "당신은 대한민국 최고의 네이미스트입니다. 더 나은 후보를 만들 때는 한국어 감각과 수상 가능성을 동시에 고려하세요."
+        system_prompt = f"""당신은 대한민국 최고의 네이미스트입니다. 더 나은 후보를 만들 때는 한국어 감각과 수상 가능성을 동시에 고려하세요.
+{contest_profile.get("prompt_boost", "")}"""
         response = await client.generate(system_prompt, prompt)
         
         json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
@@ -242,6 +246,8 @@ async def _run_head_to_head_tournament(
     if not client:
         logger.warning("토너먼트용 LLM이 없어 점수 기반 결과를 유지합니다")
         return submissions[:final_count]
+    contest_profile = build_contest_profile(contest)
+    logger.info("⚔️ 토너먼트 모델: %s/%s", client.provider_name, client.model_name)
     
     # 상위 5개 vs 나머지에서 대결
     top = submissions[:final_count]
@@ -259,6 +265,7 @@ B: {challenger['name']}
         
         try:
             system_prompt = f"""당신은 "{contest['title']}" 공모전의 최종 심사위원입니다.
+{contest_profile.get("prompt_boost", "")}
 둘 중 실제 수상 가능성이 더 높은 후보만 선택하세요."""
             response = await client.generate(system_prompt, prompt)
             json_match = re.search(r'\{[\s\S]*\}', response)
@@ -289,6 +296,8 @@ async def final_polish(
     if not client:
         logger.warning("폴리싱용 LLM이 없어 원본 후보를 그대로 사용합니다")
         return top_submissions
+    contest_profile = build_contest_profile(contest)
+    logger.info("💎 폴리싱 모델: %s/%s", client.provider_name, client.model_name)
     
     polished = []
     
@@ -318,6 +327,7 @@ async def final_polish(
         
         try:
             system_prompt = f"""당신은 "{contest['title']}" 공모전 심사위원입니다.
+{contest_profile.get("prompt_boost", "")}
 수정은 최소화하되 제출용 설명은 바로 쓸 수 있을 정도로 다듬으세요."""
             response = await client.generate(system_prompt, prompt)
             json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)

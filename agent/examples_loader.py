@@ -10,6 +10,8 @@ from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+from contest_intelligence import rank_examples_for_contest
+
 # examples.json 경로 (agent 디렉토리 기준)
 EXAMPLES_PATH = os.path.join(os.path.dirname(__file__), "..", "web", "examples", "examples.json")
 
@@ -81,11 +83,34 @@ def filter_examples(
 def get_examples_for_contest(
     contest_type: str,
     held_by_type: str,
+    contest_title: str = "",
+    contest_content: str = "",
+    held_by: str = "",
 ) -> List[Dict[str, str]]:
     """공모전에 맞는 예시 가져오기"""
     
     examples = load_examples()
-    return filter_examples(examples, contest_type, held_by_type)
+    filtered = filter_examples(examples, contest_type, held_by_type)
+
+    if contest_title or contest_content or held_by:
+        ranked = rank_examples_for_contest(
+            filtered,
+            {
+                "title": contest_title,
+                "content": contest_content,
+                "held_by": held_by,
+                "contest_type": contest_type,
+                "held_by_type": held_by_type,
+                "url": "",
+                "submission_method": "",
+                "deadline": None,
+                "d_day": None,
+            },
+        )
+        logger.info("🎯 공모전 문맥 기준 예시 재정렬 완료")
+        return ranked
+
+    return filtered
 
 
 # 테스트용
