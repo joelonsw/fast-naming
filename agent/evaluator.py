@@ -59,14 +59,14 @@ class MultiAgentEvaluator:
             self.evaluators.append((
                 "gemini",
                 "창의성과 독창성을 특히 엄격하게 보는 심사위원",
-                GeminiClient(model="gemini-2.5-flash-lite", temperature=0.2),
+                GeminiClient(model="gemini-2.5-flash", temperature=0.2),
             ))
 
         if os.getenv("AI_GITHUB_TOKEN"):
             self.evaluators.append((
                 "github",
                 "기억용이성과 실용성을 특히 엄격하게 보는 심사위원",
-                GitHubAIClient(model="openai/gpt-4.1-mini", temperature=0.2),
+                GitHubAIClient(model="gpt-4o", temperature=0.2),
             ))
 
         logger.info(
@@ -98,6 +98,10 @@ class MultiAgentEvaluator:
 
 <평가 기준>
 {json.dumps(criteria, ensure_ascii=False)}
+
+* 중요 채점 세부 규칙 (1등 수상 및 상표권 확보 기준):
+  - **진부함 및 단순합성 징벌적 감점**: '참', '바른', '뜰', '마루', '아람', '도담', '소담', '초록', '자연', '에코', '그린', '늘', '봄', '온', '누리' 등 네이밍 공모전에 단골로 쓰이는 어근의 1차원적 합성어(예: 참바른뜰, 초록아람, 자연마루, 스마트링크 등)는 **독창성/창의성(또는 참신함 관련 심사기준)에서 반드시 50점 이하의 낙제점**을 부여하십시오.
+  - 위와 같은 상투적인 작명은 다른 심사 기준(적합성, 발음성 등)이 아무리 우수하더라도 **최종 종합 합산 총점을 50점 이하로 대폭 감점하여 채점**해야 합니다. 무난한 안전지향형 작명은 1등 수상이 절대로 불가능하며, 상표 등록도 불가능하기 때문입니다.
 </평가 기준>
 
 <출품작>
@@ -292,6 +296,7 @@ async def generate_evaluation_criteria(
 </공모전 내용>
 
 위 공모전의 공정한 평가기준을 4가지로 마련하세요.
+이 중 '창의성 및 독창성'(혹은 이에 준하는 참신함 및 차별성 평가 항목)은 반드시 포함해야 하며, 해당 항목의 배점을 100점 중 최소 35점 이상으로 크게 책정하십시오.
 각 평가기준의 총합은 100이 되어야 합니다.
 
 반드시 다음 JSON 형식으로만 응답하세요:

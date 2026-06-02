@@ -94,30 +94,36 @@ class SelfLearningEngine:
         try:
             response = await self.client.generate(system_prompt, prompt)
             
-            # JSON 파싱
+            # <think> 태그 제거
             import re
-            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
+            cleaned_response = re.sub(r'<think>[\s\S]*?</think>', '', response).strip()
+            
+            # JSON 블록 추출
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', cleaned_response)
             if json_match:
-                analysis = json.loads(json_match.group(1))
+                json_str = json_match.group(1)
             else:
-                analysis = json.loads(response.strip())
+                # 백틱이 없는 경우 가장 바깥쪽 중괄호 검색
+                brace_match = re.search(r'\{[\s\S]*\}', cleaned_response)
+                json_str = brace_match.group(0) if brace_match else cleaned_response
+            
+            analysis = json.loads(json_str.strip())
             
             # 학습 결과 저장
-            self.learned_patterns["successful_keywords"].extend(
-                analysis.get("common_keywords", [])
-            )
-            self.learned_patterns["effective_strategies"].extend(
-                analysis.get("winning_techniques", [])
-            )
+            common_kws = analysis.get("common_keywords", [])
+            effective_strats = analysis.get("winning_techniques", [])
             
-            logger.info(f"✅ 패턴 분석 완료: {len(analysis.get('common_keywords', []))}개 키워드 발견")
+            self.learned_patterns["successful_keywords"].extend(common_kws)
+            self.learned_patterns["effective_strategies"].extend(effective_strats)
+            
+            logger.info(f"✅ 패턴 분석 완료: {len(common_kws)}개 키워드 발견")
             
             await asyncio.sleep(get_rate_limit_delay(self.client.provider_name))
-            
             return analysis
             
         except Exception as e:
-            logger.error(f"❌ 패턴 분석 실패: {e}")
+            logger.error(f"❌ 패턴 분석 실패: {e} | 응답 원본 일부: {response[:150]}...")
+            return {}
             return {}
     
     async def generate_improved_prompt(
@@ -195,8 +201,8 @@ class SelfLearningEngine:
         for iteration in range(1, max_iterations + 1):
             logger.info(f"\n🔁 반복 {iteration}/{max_iterations} (현재 최고점: {best_score:.1f})")
             
-            # 목표 점수 도달 시 조기 종료
-            if best_score >= target_score:
+            # 목표 점수 도달 시 조기 종료 (최소 1회는 무조건 실행하도록 보장)
+            if iteration > 1 and best_score >= target_score:
                 logger.info(f"🎯 목표 점수 {target_score} 달성! 조기 종료")
                 break
             

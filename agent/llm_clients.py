@@ -14,10 +14,9 @@ from langchain_groq import ChatGroq
 
 logger = logging.getLogger(__name__)
 
-HF_DEFAULT_PRIMARY_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507"
+HF_DEFAULT_PRIMARY_MODEL = "Qwen/Qwen2.5-72B-Instruct"
 HF_DEFAULT_FALLBACK_MODELS = [
-    "deepseek-ai/DeepSeek-V3.1",
-    "moonshotai/Kimi-K2-Instruct-0905",
+    "meta-llama/Llama-3.3-70B-Instruct",
 ]
 
 
@@ -87,7 +86,7 @@ class LLMClient(ABC):
 
 
 class GeminiClient(LLMClient):
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash-lite", temperature: float = 0.9):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash", temperature: float = 0.9):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self._model_name = model
         self.client = ChatGoogleGenerativeAI(
@@ -148,7 +147,7 @@ class GroqClient(LLMClient):
 
 
 class GitHubAIClient(LLMClient):
-    def __init__(self, api_key: Optional[str] = None, model: str = "openai/gpt-4.1-mini", temperature: float = 0.9):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o-mini", temperature: float = 0.9):
         self.api_key = api_key or os.getenv("AI_GITHUB_TOKEN")
         self._model_name = model
         self.temperature = temperature
@@ -306,8 +305,8 @@ def create_generation_clients() -> List[LLMClient]:
 
     if os.getenv("AI_GITHUB_TOKEN"):
         try:
-            clients.append(GitHubAIClient(model="openai/gpt-4.1-mini"))
-            logger.info("✅ GitHub AI 클라이언트 초기화 성공 (gpt-4.1-mini)")
+            clients.append(GitHubAIClient(model="gpt-4o-mini"))
+            logger.info("✅ GitHub AI 클라이언트 초기화 성공 (gpt-4o-mini)")
         except Exception as e:
             logger.error("❌ GitHub AI 클라이언트 초기화 실패: %s", e)
 
@@ -322,9 +321,9 @@ def create_primary_client(temperature: float = 0.3, max_tokens: int = 2048) -> O
         return GroqClient(model="openai/gpt-oss-120b", temperature=temperature)
 
     if os.getenv("GEMINI_API_KEY"):
-        return GeminiClient(model="gemini-2.5-flash-lite", temperature=temperature)
+        return GeminiClient(model="gemini-2.5-flash", temperature=temperature)
 
     if os.getenv("AI_GITHUB_TOKEN"):
-        return GitHubAIClient(model="openai/gpt-4.1-mini", temperature=temperature)
+        return GitHubAIClient(model="gpt-4o-mini", temperature=temperature)
 
     return None

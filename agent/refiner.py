@@ -204,83 +204,116 @@ async def tournament_selection(
     submissions: List[Submission],
     final_count: int = 5,
 ) -> List[Submission]:
-    """토너먼트 방식으로 최종 후보 선정
-    
-    Round 1: 점수 기준 상위 20개+
-    Round 2: 전략 다양성 보장
-    Round 3: 1:1 대결을 통한 최종 선정
-    """
-    logger.info(f"🏆 토너먼트 선정 시작 ({len(submissions)}개 → {final_count}개)")
+    """16강 토너먼트 방식으로 최종 후보 선정"""
+    logger.info(f"🏆 16강 토너먼트 선정 시작 ({len(submissions)}개 → {final_count}개)")
     
     if len(submissions) <= final_count:
         return submissions
     
-    # Round 1: 상위 20개 선정
-    round1 = sorted(submissions, key=lambda x: x.get('score', 0) or 0, reverse=True)[:20]
+    # Round 1: 상위 32개 선정
+    round1 = sorted(submissions, key=lambda x: x.get('score', 0) or 0, reverse=True)[:32]
     logger.info(f"   Round 1: {len(submissions)} → {len(round1)}개 (점수 기준)")
     
-    # Round 2: 전략 다양성 보장
-    round2 = ensure_strategy_diversity(round1, top_n=10)
-    logger.info(f"   Round 2: {len(round1)} → {len(round2)}개 (전략 다양성)")
+    # Round 2: 전략 다양성 보장하여 16강 후보 확정
+    round2 = ensure_strategy_diversity(round1, top_n=16)
+    logger.info(f"   Round 2: {len(round1)} → {len(round2)}개 (16강 후보)")
     
-    # Round 3: 1:1 대결 토너먼트
-    finalists = await _run_head_to_head_tournament(contest, round2, final_count)
-    logger.info(f"   Round 3: {len(round2)} → {len(finalists)}개 (1:1 토너먼트)")
-    
+    # Round 3: 1:1 토너먼트 매치
+    finalists = await _run_16_bracket_tournament(contest, round2, final_count)
     return finalists
 
 
-async def _run_head_to_head_tournament(
+async def _run_16_bracket_tournament(
     contest,
-    submissions: List[Submission],
+    candidates: List[Submission],
     final_count: int,
 ) -> List[Submission]:
-    """1:1 대결을 통한 토너먼트"""
+    """16강 대진표 토너먼트 진행"""
     import json
     import re
     
-    if len(submissions) <= final_count:
-        return submissions
-    
-    client = create_primary_client(temperature=0.3, max_tokens=1024)
+    client = create_primary_client(temperature=0.2, max_tokens=1024)
     if not client:
         logger.warning("토너먼트용 LLM이 없어 점수 기반 결과를 유지합니다")
-        return submissions[:final_count]
-    contest_profile = build_contest_profile(contest)
-    logger.info("⚔️ 토너먼트 모델: %s/%s", client.provider_name, client.model_name)
-    
-    # 상위 5개 vs 나머지에서 대결
-    top = submissions[:final_count]
-    challengers = submissions[final_count:]
-    
-    for challenger in challengers[:3]:  # 최대 3개만 도전
-        weakest_top = min(top, key=lambda x: x.get('score', 0) or 0)
+        return candidates[:final_count]
         
+    contest_profile = build_contest_profile(contest)
+    logger.info("⚔️ 토너먼트 심사 개시 (16강) | 모델: %s/%s", client.provider_name, client.model_name)
+    
+    async def match_duel(sub_a: Submission, sub_b: Submission, round_name: str) -> Submission:
         prompt = f"""다음 두 작명 중 "{contest['title']}" 공모전에서 1등할 가능성이 더 높은 것을 선택하세요.
 
-A: {weakest_top['name']}
-B: {challenger['name']}
+A: {sub_a['name']}
+   - 설명: {sub_a['description']}
+   - 전략: {sub_a.get('strategy', 'Unknown')}
 
-반드시 JSON으로 응답: {{"winner": "A" 또는 "B", "reason": "선택 이유"}}"""
+B: {sub_b['name']}
+   - 설명: {sub_b['description']}
+   - 전략: {sub_b.get('strategy', 'Unknown')}
+
+반드시 다음 JSON 형식으로만 응답해야 합니다:
+{{"winner": "A" 또는 "B", "reason": "선택 이유"}}"""
+
+        system_prompt = f"""당신은 "{contest['title']}" 공모전의 최종 심사위원장입니다.
+{contest_profile.get("prompt_boost", "")}
+둘 중 식상함이 전혀 없고 실제 1등 상표로 등록해 쓸 수 있을 만큼 가장 참신하고 격조 높은 후보 하나만 결정하십시오."""
         
         try:
-            system_prompt = f"""당신은 "{contest['title']}" 공모전의 최종 심사위원입니다.
-{contest_profile.get("prompt_boost", "")}
-둘 중 실제 수상 가능성이 더 높은 후보만 선택하세요."""
             response = await client.generate(system_prompt, prompt)
-            json_match = re.search(r'\{[\s\S]*\}', response)
+            
+            # <think> 태그 제거
+            cleaned_response = re.sub(r'<think>[\s\S]*?</think>', '', response).strip()
+            
+            json_match = re.search(r'\{[\s\S]*\}', cleaned_response)
             if json_match:
                 result = json.loads(json_match.group())
-                if result.get('winner') == 'B':
-                    top.remove(weakest_top)
-                    top.append(challenger)
-                    logger.info(f"   🔄 교체: '{weakest_top['name']}' → '{challenger['name']}'")
-            
-            await asyncio.sleep(get_rate_limit_delay(client.provider_name))
+                winner_char = result.get('winner', 'A')
+                winner = sub_b if winner_char == 'B' else sub_a
+                logger.info(f"   ⚔️ [{round_name}] '{sub_a['name']}' vs '{sub_b['name']}' -> 승자: '{winner['name']}' (이유: {result.get('reason', 'N/A')[:40]}...)")
+                
+                # 승자 점수 가산점 보정 (토너먼트 승리 가치 반영)
+                winner['score'] = (winner.get('score') or 50) + 1.5
+                return winner
+            else:
+                return sub_a
         except Exception as e:
             logger.error(f"대결 실패: {e}")
+            return sub_a
+        finally:
+            await asyncio.sleep(get_rate_limit_delay(client.provider_name))
+
+    # 1. 16강 -> 8강 (8개 매치)
+    round_of_16 = candidates[:16]
+    while len(round_of_16) < 16:
+        round_of_16.append(round_of_16[0])
+        
+    winners_of_8 = []
+    logger.info("📢 --- 토너먼트 16강전 시작 ---")
+    for i in range(8):
+        winner = await match_duel(round_of_16[i], round_of_16[15 - i], "16강")
+        winners_of_8.append(winner)
+        
+    # 2. 8강 -> 4강 (4개 매치)
+    winners_of_4 = []
+    logger.info("📢 --- 토너먼트 8강전 시작 ---")
+    for i in range(4):
+        winner = await match_duel(winners_of_8[i], winners_of_8[7 - i], "8강")
+        winners_of_4.append(winner)
+
+    # 3. 4강 -> 결승 및 3/4위전
+    logger.info("📢 --- 토너먼트 준결승(4강) 시작 ---")
+    finalist_a = await match_duel(winners_of_4[0], winners_of_4[3], "준결승 1")
+    finalist_b = await match_duel(winners_of_4[1], winners_of_4[2], "준결승 2")
     
-    return top
+    logger.info("📢 --- 토너먼트 결승전 시작 ---")
+    absolute_champion = await match_duel(finalist_a, finalist_b, "결승전")
+    
+    # 최종 챔피언 추가 가산점
+    absolute_champion['score'] = (absolute_champion.get('score') or 50) + 2.0
+    
+    # 전체 후보 중 score 순으로 정렬해서 final_count 수만큼 채움
+    ranked_finalists = sorted(candidates, key=lambda x: x.get('score', 0) or 0, reverse=True)
+    return ranked_finalists[:final_count]
 
 
 async def final_polish(
@@ -308,8 +341,10 @@ async def final_polish(
 - 현재 작명: {sub['name']}
 - 설명: {sub['description']}
 
-중요한 점은, 단순히 수정 이유만 말하는 것이 아니라 **공모전 주최측에 직접 제출할 수 있는 완벽하고 설득력 있는 '작명 배경 및 의미(Naming Reason)'를 작성해야 한다는 것입니다.**
-보는 순간 1등이 확신되는 감동적이고 매력적인 설명이어야 합니다.
+[중요 검증 가이드 - 1등 수상 및 상표권 확보를 위한 규칙]
+1. **진부한 어근 단순합성 타파**: '참/바른/뜰/마루/아람/도담/소담/초록/자연/에코/그린/늘/봄/온/누리' 등을 1차원적으로 단순 조합한 작명은 식상함을 주기 때문에 심사위원들이 탈락시킵니다. 만약 현재 작명이 이런 상투적인 형태라면, **반드시 과감하게 폐기하고 완전히 신선하고 세련된 네이밍으로 재탄생(수정)**시키십시오.
+2. **상표권 및 독점 사용성 검증**: 제안하는 이름이 기존 등록 상업 브랜드나 특허청 키프리스에 이미 무수하게 등재되었을 법한 뻔한 합성어라면, 독창성을 부여하여 상표권 취득 가능성이 90% 이상인 유일무이한 명사로 변경하십시오.
+3. **비즈니스 설득력 극대화**: 공모전 주최측에 직접 복사해서 제출할 수 있는 완벽하고 품격 있는 '작명 배경 및 의미(Naming Reason)'를 작성하십시오. 전문적인 브랜드 에이전시의 기획서처럼 고급스럽고 지적이며 매력적인 스토리텔링을 입혀야 합니다.
 
 다음 중 하나를 선택하세요:
 1. 현재 작명이 이미 완벽하면 그대로 유지하되 제출용 설명만 다듬기

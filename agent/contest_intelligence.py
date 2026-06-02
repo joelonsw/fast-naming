@@ -17,7 +17,9 @@ KOREAN_STOPWORDS = {
 
 GENERIC_TERMS = {
     "미래", "혁신", "도약", "행복", "희망", "비전", "함께", "세상", "내일", "가능성", "성장",
-    "드림", "비전", "스마트", "글로벌", "새로운", "우리", "모두", "플러스", "더", "굿",
+    "드림", "스마트", "글로벌", "새로운", "우리", "모두", "플러스", "더", "굿",
+    "참", "바른", "뜰", "마루", "아람", "도담", "소담", "초록", "자연", "에코", "그린",
+    "늘", "봄", "온", "누리", "하늘", "사랑", "모아"
 }
 
 DOMAIN_KEYWORDS = {
@@ -299,6 +301,13 @@ def assess_submission_fit(contest: ContestInfo, submission: Submission) -> Dict[
         elif len(name.replace(" ", "")) <= 4:
             adjustment -= 1.2
             reasons.append("슬로건 정보량 부족 -1.2")
+
+    # 작명(name) 자체에 진부한 단어(Cliché)가 직접 포함된 경우 강력한 페널티 부과
+    name_generic_hits = [term for term in GENERIC_TERMS if term in name.lower()]
+    if name_generic_hits:
+        name_penalty = min(5.0, len(name_generic_hits) * 1.5)
+        adjustment -= name_penalty
+        reasons.append(f"진부한 단어(Cliché) 직접 포함 -{name_penalty:.1f} ({', '.join(name_generic_hits)})")
 
     if generic_hits and not keyword_hits:
         penalty = min(3.0, len(generic_hits) * 0.7)

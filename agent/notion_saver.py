@@ -15,12 +15,23 @@ from state import ContestInfo, Submission
 logger = logging.getLogger(__name__)
 
 
+def format_uuid(uuid_str: str) -> str:
+    """하이픈이 없는 32글자 UUID를 하이픈이 들어간 8-4-4-4-12 포맷으로 변환"""
+    if not uuid_str:
+        return ""
+    uuid_str = uuid_str.replace("-", "").strip()
+    if len(uuid_str) == 32:
+        return f"{uuid_str[:8]}-{uuid_str[8:12]}-{uuid_str[12:16]}-{uuid_str[16:20]}-{uuid_str[20:]}"
+    return uuid_str
+
+
 class NotionSaver:
     """Notion 저장 관리자"""
     
     def __init__(self):
         self.api_key = os.getenv("NOTION_API_KEY")
-        self.parent_page_id = os.getenv("NOTION_PARENT_PAGE_ID")
+        parent_id = os.getenv("NOTION_PARENT_PAGE_ID")
+        self.parent_page_id = format_uuid(parent_id) if parent_id else None
         
         if not self.api_key:
             raise ValueError("NOTION_API_KEY 환경변수가 설정되지 않았습니다")
@@ -40,10 +51,11 @@ class NotionSaver:
         """
         logger.info(f"📁 주차 페이지 검색: {week_info}")
         
+        parent_id = format_uuid(self.parent_page_id)
         # 기존 페이지 검색
         try:
             children = await self.client.blocks.children.list(
-                block_id=self.parent_page_id
+                block_id=parent_id
             )
             
             for block in children.get("results", []):
@@ -59,7 +71,7 @@ class NotionSaver:
         logger.info(f"📝 새 주차 페이지 생성: {week_info}")
         
         new_page = await self.client.pages.create(
-            parent={"page_id": self.parent_page_id},
+            parent={"page_id": parent_id},
             properties={
                 "title": {
                     "title": [{"text": {"content": week_info}}]
@@ -97,7 +109,7 @@ class NotionSaver:
         contest: ContestInfo,
         top3: List[Submission],
         all_submissions: List[Submission] = None,
-    ) -> str:
+     ) -> str:
         """공모전 결과 페이지 생성
         
         Args:
@@ -109,6 +121,7 @@ class NotionSaver:
         Returns:
             생성된 페이지 ID
         """
+        parent_page_id = format_uuid(parent_page_id)
         logger.info(f"📝 공모전 페이지 생성: {contest['title']}")
         
         # 메달에 따른 작명 블록 생성
