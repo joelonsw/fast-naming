@@ -104,18 +104,56 @@ class GeminiClient(LLMClient):
         return self._model_name
 
     async def generate(self, system_prompt: str, user_prompt: str) -> str:
-        try:
-            response = await self.client.ainvoke(
-                [
-                    SystemMessage(content=system_prompt),
-                    HumanMessage(content=user_prompt),
-                ]
-            )
-            return response.content
-        except Exception as e:
-            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                raise Exception("Rate limit exceeded (429) - skipping")
-            raise
+        import asyncio
+        retries = [5, 15, 30]  # 대기 시간 초 (최대 3회 재시도)
+        
+        for attempt, delay in enumerate(retries, 1):
+            try:
+                response = await self.client.ainvoke(
+                    [
+                        SystemMessage(content=system_prompt),
+                        HumanMessage(content=user_prompt),
+                    ]
+                )
+                return response.content
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    logger.warning(
+                        "⚠️ [Gemini 429 Quota 초과] %d차 재시도 대기 (%d초)... (에러: %s)",
+                        attempt,
+                        delay,
+                        err_str[:60]
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise
+        
+        # 3회 재시도를 모두 실패한 경우 Fallback 기동
+        return await self._fallback_generate(system_prompt, user_prompt)
+
+    async def _fallback_generate(self, system_prompt: str, user_prompt: str) -> str:
+        logger.warning("🚨 [Gemini 429 임계 초과] Fallback 모델로 즉시 우회 호출합니다.")
+        
+        # 1순위 Fallback: GitHub AI (gpt-4o-mini)
+        if os.getenv("AI_GITHUB_TOKEN"):
+            try:
+                logger.info("👉 Fallback 1순위 기동: GitHub AI (gpt-4o-mini)")
+                fallback_client = GitHubAIClient(model="gpt-4o-mini", temperature=0.9)
+                return await fallback_client.generate(system_prompt, user_prompt)
+            except Exception as e:
+                logger.error("🚨 Fallback 1순위 (gpt-4o-mini) 호출 실패: %s", e)
+        
+        # 2순위 Fallback: Hugging Face Router (Qwen2.5-72B-Instruct)
+        if get_huggingface_api_key():
+            try:
+                logger.info("👉 Fallback 2순위 기동: Hugging Face (Qwen/Qwen2.5-72B-Instruct)")
+                fallback_client = HuggingFaceClient(model="Qwen/Qwen2.5-72B-Instruct", temperature=0.8)
+                return await fallback_client.generate(system_prompt, user_prompt)
+            except Exception as e:
+                logger.error("🚨 Fallback 2순위 (Qwen2.5-72B) 호출 실패: %s", e)
+                
+        raise RuntimeError("Gemini 429 초과로 인한 모든 Fallback 모델 우회 호출도 실패하였거나 활성 API 키가 없습니다.")
 
 
 class GroqClient(LLMClient):
