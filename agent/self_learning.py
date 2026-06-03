@@ -91,6 +91,7 @@ class SelfLearningEngine:
 }}
 ```"""
         
+        response = ""
         try:
             response = await self.client.generate(system_prompt, prompt)
             
@@ -123,7 +124,6 @@ class SelfLearningEngine:
             
         except Exception as e:
             logger.error(f"❌ 패턴 분석 실패: {e} | 응답 원본 일부: {response[:150]}...")
-            return {}
             return {}
     
     async def generate_improved_prompt(

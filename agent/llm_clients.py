@@ -156,7 +156,7 @@ class GeminiClient(LLMClient):
                 logger.error("🚨 Fallback 1순위 (gpt-4o-mini) 호출 실패: %s", e)
         
         # 2순위 Fallback: Hugging Face Router (Qwen2.5-72B-Instruct)
-        if get_huggingface_api_key():
+        if get_huggingface_api_key() and not HuggingFaceClient._disabled:
             try:
                 logger.info("👉 Fallback 2순위 기동: Hugging Face (Qwen/Qwen2.5-72B-Instruct)")
                 fallback_client = HuggingFaceClient(model="Qwen/Qwen2.5-72B-Instruct", temperature=0.8)
@@ -235,6 +235,7 @@ class GitHubAIClient(LLMClient):
 
 class HuggingFaceClient(LLMClient):
     """OpenAI-compatible Hugging Face router client with model fallback."""
+    _disabled = False  # 클래스 레벨 비활성화 플래그 (402, 401, 403 등 빌링/인증 오류 대응)
 
     def __init__(
         self,
@@ -277,6 +278,10 @@ class HuggingFaceClient(LLMClient):
         return f"{model_name}:{self.provider}"
 
     async def generate(self, system_prompt: str, user_prompt: str) -> str:
+        if HuggingFaceClient._disabled:
+            logger.info("⚡ [Hugging Face 비활성화] 빌링/인증 오류 상태이므로 즉시 Fallback 우회합니다.")
+            return await self._fallback_generate(system_prompt, user_prompt)
+
         if not self.api_key:
             raise ValueError("HUGGINGFACE_API_KEY 또는 HF_TOKEN이 필요합니다")
 
@@ -302,8 +307,14 @@ class HuggingFaceClient(LLMClient):
                 try:
                     response = await client.post(self.endpoint, headers=headers, json=payload)
 
-                    if response.status_code in (401, 403):
-                        response.raise_for_status()
+                    if response.status_code in (401, 402, 403):
+                        logger.error(
+                            "🚨 Hugging Face 인증/빌링 에러 발생 (%d): %s", 
+                            response.status_code, 
+                            response.text
+                        )
+                        HuggingFaceClient._disabled = True
+                        return await self._fallback_generate(system_prompt, user_prompt)
 
                     if response.status_code in (429, 500, 502, 503, 504):
                         raise httpx.HTTPStatusError(
@@ -317,6 +328,12 @@ class HuggingFaceClient(LLMClient):
                     self._model_name = candidate
                     return data["choices"][0]["message"]["content"]
                 except Exception as e:
+                    err_str = str(e)
+                    if "401" in err_str or "402" in err_str or "403" in err_str:
+                        logger.error("🚨 Hugging Face 인증/빌링 에러 감지: %s", err_str)
+                        HuggingFaceClient._disabled = True
+                        return await self._fallback_generate(system_prompt, user_prompt)
+
                     last_error = e
                     logger.warning(
                         "Hugging Face model failed, trying next candidate: %s (%s)",
@@ -324,7 +341,41 @@ class HuggingFaceClient(LLMClient):
                         e,
                     )
 
-        raise last_error or RuntimeError("Hugging Face generation failed")
+        # 모든 후보 실패 시 Fallback 호출 및 비활성화
+        HuggingFaceClient._disabled = True
+        return await self._fallback_generate(system_prompt, user_prompt)
+
+    async def _fallback_generate(self, system_prompt: str, user_prompt: str) -> str:
+        logger.warning("🚨 [Hugging Face 임계 초과] Fallback 모델로 즉시 우회 호출합니다.")
+        
+        # 1순위 Fallback: GitHub AI (gpt-4o-mini)
+        if os.getenv("AI_GITHUB_TOKEN"):
+            try:
+                logger.info("👉 Fallback 1순위 기동: GitHub AI (gpt-4o-mini)")
+                fallback_client = GitHubAIClient(model="gpt-4o-mini", temperature=self.temperature)
+                return await fallback_client.generate(system_prompt, user_prompt)
+            except Exception as e:
+                logger.error("🚨 Fallback 1순위 (gpt-4o-mini) 호출 실패: %s", e)
+        
+        # 2순위 Fallback: Gemini (gemini-2.5-flash)
+        if os.getenv("GEMINI_API_KEY") and not GeminiClient._circuit_broken:
+            try:
+                logger.info("👉 Fallback 2순위 기동: Gemini (gemini-2.5-flash)")
+                fallback_client = GeminiClient(model="gemini-2.5-flash", temperature=self.temperature)
+                return await fallback_client.generate(system_prompt, user_prompt)
+            except Exception as e:
+                logger.error("🚨 Fallback 2순위 (Gemini) 호출 실패: %s", e)
+                
+        # 3순위 Fallback: Groq (openai/gpt-oss-120b)
+        if os.getenv("GROQ_API_KEY"):
+            try:
+                logger.info("👉 Fallback 3순위 기동: Groq (openai/gpt-oss-120b)")
+                fallback_client = GroqClient(model="openai/gpt-oss-120b", temperature=self.temperature)
+                return await fallback_client.generate(system_prompt, user_prompt)
+            except Exception as e:
+                logger.error("🚨 Fallback 3순위 (Groq) 호출 실패: %s", e)
+                
+        raise RuntimeError("Hugging Face 에러로 인한 모든 Fallback 모델 우회 호출도 실패하였거나 활성 API 키가 없습니다.")
 
 
 def create_generation_clients() -> List[LLMClient]:
