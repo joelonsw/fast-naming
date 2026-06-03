@@ -86,6 +86,8 @@ class LLMClient(ABC):
 
 
 class GeminiClient(LLMClient):
+    _circuit_broken = False  # 클래스 레벨 회로 차단기 플래그
+
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash", temperature: float = 0.9):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self._model_name = model
@@ -93,6 +95,7 @@ class GeminiClient(LLMClient):
             model=model,
             google_api_key=self.api_key,
             temperature=temperature,
+            max_retries=1,  # SDK 내부 재시도를 1회로 차단하여 지연 시간 누적 방지
         )
 
     @property
@@ -105,7 +108,13 @@ class GeminiClient(LLMClient):
 
     async def generate(self, system_prompt: str, user_prompt: str) -> str:
         import asyncio
-        retries = [5, 15, 30]  # 대기 시간 초 (최대 3회 재시도)
+        
+        # 회로가 이미 차단되어 있다면 Gemini를 아예 건너뛰고 바로 Fallback 실행
+        if GeminiClient._circuit_broken:
+            logger.info("⚡ [Gemini 회로 차단] 429 쿼타 고갈 상태이므로 즉시 Fallback 우회합니다.")
+            return await self._fallback_generate(system_prompt, user_prompt)
+
+        retries = [2, 8]  # 대기 시간 초 (최대 2회 재시도)
         
         for attempt, delay in enumerate(retries, 1):
             try:
@@ -129,8 +138,10 @@ class GeminiClient(LLMClient):
                 else:
                     raise
         
-        # 3회 재시도를 모두 실패한 경우 Fallback 기동
-        return await self._fallback_generate(system_prompt, user_prompt)
+        # 2회 재시도를 모두 실패한 경우 Fallback 기동 및 회로 차단
+        result = await self._fallback_generate(system_prompt, user_prompt)
+        GeminiClient._circuit_broken = True  # 다음 호출부터 즉시 우회하도록 차단 설정
+        return result
 
     async def _fallback_generate(self, system_prompt: str, user_prompt: str) -> str:
         logger.warning("🚨 [Gemini 429 임계 초과] Fallback 모델로 즉시 우회 호출합니다.")
